@@ -3,56 +3,284 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cổng Game Văn Phòng</title>
+    <title>GameHub | Cổng Game Giải Lao</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #e9ecef; text-align: center; padding: 20px; }
-        .game-card { display: inline-block; background: white; padding: 20px; margin: 10px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 200px; }
-        .game-card h3 { margin-top: 0; }
-        button { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; width: 100%; }
-        button:hover { background: #0056b3; }
-        #chat-box { background: white; width: 80%; max-width: 500px; height: 150px; margin: 20px auto; overflow-y: scroll; padding: 10px; border: 1px solid #ccc; text-align: left; }
-    </style>
-    <script src="/socket.io/socket.io.js"></script>
-</head>
-<body>
-    <h1>🎮 Cổng Game Giải Lao 🎮</h1>
-    
-    <div class="game-card">
-        <h3>🃏 Bài UNO</h3>
-        <p>Sát phạt, lươn lẹo (2-10 người)</p>
-        <button onclick="window.location.href='/uno'">Vào Phòng</button>
-    </div>
-
-    <div class="game-card">
-        <h3>♟️ Cờ Vua</h3>
-        <p>Đấu trí 1v1</p>
-        <button onclick="window.location.href='/chess'">Vào Phòng</button>
-    </div>
-
-    <hr style="margin: 30px 0; border: 1px solid #ddd;">
-
-    <h2>Kênh Chat Tổng</h2>
-    <input type="text" id="username" placeholder="Tên của bạn..." style="padding: 5px;">
-    <div id="chat-box"></div>
-    <input type="text" id="msg" placeholder="Nhập tin nhắn..." style="padding: 5px; width: 250px;">
-    <button onclick="sendChat()" style="width: auto;">Gửi</button>
-
-    <script>
-        const socket = io();
-
-        function sendChat() {
-            const name = document.getElementById('username').value || "Ẩn danh";
-            const msg = document.getElementById('msg').value;
-            if(!msg) return;
-            socket.emit('lobby-chat', { name, msg });
-            document.getElementById('msg').value = '';
+        /* CSS Khởi tạo & Biến màu sắc hiện đại */
+        :root {
+            --bg: #f8fafc; --surface: #ffffff;
+            --text-main: #0f172a; --text-muted: #64748b;
+            --primary: #18181b; --primary-hover: #3f3f46;
+            --border: #e2e8f0; --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            --shadow-hover: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            --radius: 16px;
         }
 
-        socket.on('lobby-chat', (data) => {
-            const box = document.getElementById('chat-box');
-            box.innerHTML += `<p><b>${data.name}:</b> ${data.msg}</p>`;
-            box.scrollTop = box.scrollHeight;
-        });
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: var(--bg); color: var(--text-main); line-height: 1.5; min-height: 100vh; }
+        
+        /* Navbar Tổng */
+        .navbar { display: flex; justify-content: space-between; align-items: center; padding: 15px 5%; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 10; }
+        .nav-brand { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+        .nav-profile { display: none; align-items: center; gap: 10px; background: var(--bg); padding: 5px 15px 5px 5px; border-radius: 50px; border: 1px solid var(--border); }
+        .nav-profile img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #e4e4e7; }
+        .nav-profile span { font-weight: 600; font-size: 14px; }
+        .nav-profile button { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; font-weight: bold; margin-left: 5px; }
+
+        /* Container Chính */
+        .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+        
+        /* Màn hình Nhập Tên & Avatar */
+        .login-view { background: var(--surface); padding: 40px; border-radius: var(--radius); box-shadow: var(--shadow); max-width: 500px; margin: 0 auto; text-align: center; }
+        .login-view h1 { margin-bottom: 5px; font-size: 28px; }
+        .login-view p { color: var(--text-muted); margin-bottom: 25px; }
+        
+        .avatar-container { max-height: 250px; overflow-y: auto; margin-bottom: 20px; padding: 10px; background: var(--bg); border-radius: 12px; border: 1px solid var(--border); }
+        .avatar-container::-webkit-scrollbar { width: 6px; }
+        .avatar-container::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .avatar-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+        .avatar-category { width: 100%; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-top: 15px; margin-bottom: 5px; text-align: left; padding-left: 5px; letter-spacing: 0.5px;}
+        .avatar-option { width: 55px; height: 55px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: 0.2s ease; background: #e4e4e7; object-fit: cover; }
+        .avatar-option.selected { border-color: var(--primary); transform: scale(1.15); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .avatar-option:hover:not(.selected) { transform: scale(1.1); }
+
+        .input-group { display: flex; flex-direction: column; gap: 10px; }
+        input[type="text"] { padding: 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; background: #f8fafc; outline: none; transition: border 0.2s; }
+        input[type="text"]:focus { border-color: var(--text-muted); }
+        
+        .btn-main { padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .btn-main:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-outline { background: transparent; border: 2px solid var(--border); color: var(--primary); }
+        .btn-outline:hover { background: var(--bg); border-color: #cbd5e1; }
+
+        /* Màn hình Danh sách Game (Grid Cards) */
+        .games-view { display: none; }
+        .section-header { margin-bottom: 30px; }
+        .section-header h2 { font-size: 28px; }
+        .section-header p { color: var(--text-muted); }
+        
+        .games-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; }
+        
+        .game-card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border); overflow: hidden; transition: all 0.3s ease; display: flex; flex-direction: column; }
+        .game-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-hover); border-color: #cbd5e1; }
+        
+        .game-icon-area { height: 120px; display: flex; align-items: center; justify-content: center; font-size: 50px; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border-bottom: 1px solid var(--border); }
+        .game-info { padding: 20px; flex: 1; }
+        .game-info h3 { font-size: 20px; margin-bottom: 8px; }
+        .game-info p { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; }
+        .game-info .tags { display: flex; gap: 8px; margin-bottom: 20px; }
+        .tag { font-size: 12px; padding: 4px 10px; border-radius: 50px; background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); font-weight: 600;}
+        
+        .game-action { padding: 0 20px 20px 20px; }
+
+        /* Màn hình Tùy chọn Phòng */
+        .options-view { display: none; background: var(--surface); padding: 40px; border-radius: var(--radius); box-shadow: var(--shadow); max-width: 500px; margin: 0 auto; text-align: center; }
+        .options-view h2 { margin-bottom: 10px; font-size: 24px; }
+        .options-view p { color: var(--text-muted); margin-bottom: 30px; }
+        .options-grid { display: flex; flex-direction: column; gap: 15px; }
+
+        @media (max-width: 600px) {
+            .container { margin: 20px auto; }
+            .login-view, .options-view { padding: 25px; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="nav-brand">🎮 GameHub</div>
+        <div class="nav-profile" id="nav-profile">
+            <img id="nav-avatar" src="" alt="Avatar">
+            <span id="nav-name"></span>
+            <button onclick="logout()">Đổi</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        
+        <div class="login-view" id="step-name">
+            <h1>Hồ sơ người chơi</h1>
+            <p>Thiết lập danh tính trước khi tham chiến</p>
+            
+            <div class="avatar-container">
+                <div class="avatar-list">
+                    <div class="avatar-category">🏆 World Cup 2026 Teams</div>
+                    <img src="https://api.dicebear.com/7.x/initials/svg?seed=USA&backgroundColor=0284c7&textColor=ffffff" class="avatar-option" title="USA" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/initials/svg?seed=MEX&backgroundColor=16a34a&textColor=ffffff" class="avatar-option" title="Mexico" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/initials/svg?seed=CAN&backgroundColor=dc2626&textColor=ffffff" class="avatar-option" title="Canada" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/initials/svg?seed=ARG&backgroundColor=7dd3fc&textColor=ffffff" class="avatar-option" title="Argentina" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/initials/svg?seed=FRA&backgroundColor=1d4ed8&textColor=ffffff" class="avatar-option" title="France" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/initials/svg?seed=ENG&backgroundColor=ffffff&textColor=dc2626" class="avatar-option" title="England" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/initials/svg?seed=GER&backgroundColor=18181b&textColor=ffffff" class="avatar-option" title="Germany" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/initials/svg?seed=VIE&backgroundColor=ef4444&textColor=fbbf24" class="avatar-option" title="Vietnam" onclick="selectAvatar(this)">
+
+                    <div class="avatar-category">⚽ Football Stars & Boys</div>
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Messi" class="avatar-option" title="Messi" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Mbappe" class="avatar-option" title="Mbappe" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Bellingham" class="avatar-option" title="Bellingham" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Mainoo" class="avatar-option" title="Kobbie" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Garnacho" class="avatar-option" title="Garna" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Bruno" class="avatar-option" title="Magnifico" onclick="selectAvatar(this)">
+
+                    <div class="avatar-category">🤖 Bottts & Pixels (Giải trí)</div>
+                    <img src="https://api.dicebear.com/7.x/bottts/svg?seed=Felix" class="avatar-option selected" title="Robot 1" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/bottts/svg?seed=Oliver" class="avatar-option" title="Robot 2" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=Alex" class="avatar-option" title="Pixel 1" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=John" class="avatar-option" title="Pixel 2" onclick="selectAvatar(this)">
+
+                    <div class="avatar-category">🎨 Modern Art (Cá tính)</div>
+                    <img src="https://api.dicebear.com/7.x/micah/svg?seed=Lily" class="avatar-option" title="Micah 1" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/micah/svg?seed=Nala" class="avatar-option" title="Micah 2" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Caleb" class="avatar-option" title="Notion 1" onclick="selectAvatar(this)">
+                    <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Mia" class="avatar-option" title="Notion 2" onclick="selectAvatar(this)">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="username" placeholder="Tên hiển thị của bạn..." onkeypress="if(event.key === 'Enter') saveName()">
+                <button class="btn-main" onclick="saveName()">Vào Sảnh Chính</button>
+            </div>
+        </div>
+
+        <div class="games-view" id="step-games">
+            <div class="section-header">
+                <h2>Kho Trò Chơi</h2>
+                <p>Chọn một tựa game để bắt đầu giải trí</p>
+            </div>
+            
+            <div class="games-grid">
+                
+                <div class="game-card">
+                    <div class="game-icon-area" style="background: linear-gradient(135deg, #f8fafc 0%, #cbd5e1 100%);">♟️</div>
+                    <div class="game-info">
+                        <h3>Cờ Vua Trí Tuệ</h3>
+                        <div class="tags">
+                            <span class="tag">1v1</span>
+                            <span class="tag">Logic</span>
+                            <span class="tag">PvP / PvE</span>
+                        </div>
+                        <p>Đấu trí căng thẳng cùng đồng nghiệp hoặc luyện tập nâng cao kỹ năng với hệ thống Trí tuệ nhân tạo (Bot).</p>
+                    </div>
+                    <div class="game-action">
+                        <button class="btn-main" style="width: 100%;" onclick="showChessOptions()">Vào Phòng Cờ</button>
+                    </div>
+                </div>
+
+                <div class="game-card">
+                    <div class="game-icon-area" style="background: linear-gradient(135deg, #fef2f2 0%, #fca5a5 100%);">🃏</div>
+                    <div class="game-info">
+                        <h3>Bài UNO Quyết Chiến</h3>
+                        <div class="tags">
+                            <span class="tag">2 - 10 Người</span>
+                            <span class="tag">Ẩn Bài</span>
+                            <span class="tag">boardgame.io</span>
+                        </div>
+                        <p>Tựa game sát phạt, lươn lẹo hủy diệt tình cảm anh em văn phòng vận hành trên nền tảng an toàn bảo mật.</p>
+                    </div>
+                    <div class="game-action">
+                        <button class="btn-main" style="width: 100%;" onclick="showUnoOptions()">Vào Phòng UNO</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="options-view" id="step-chess-options">
+            <h2>Thiết lập Bàn Cờ</h2>
+            <p>Chọn chế độ chơi phù hợp với bạn</p>
+            
+            <div class="options-grid">
+                <button class="btn-main btn-outline" onclick="playWithBot()">🤖 Chơi với Máy (Luyện tập)</button>
+                <button class="btn-main" onclick="createRoom()">👥 Tạo phòng Online (Mới)</button>
+                <button class="btn-main btn-outline" style="border: none; margin-top: 10px;" onclick="backToGames()">🔙 Quay lại Sảnh</button>
+            </div>
+        </div>
+
+        <div class="options-view" id="step-uno-options">
+            <h2>Thiết lập Phòng UNO</h2>
+            <p>Mời đồng nghiệp vào phòng sát phạt</p>
+            
+            <div class="options-grid">
+                <button class="btn-main" onclick="createUnoRoom()">👥 Tạo phòng Online</button>
+                <button class="btn-main btn-outline" style="border: none; margin-top: 10px;" onclick="backToGamesFromUno()">🔙 Quay lại Sảnh</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let myName = "";
+        let myAvatar = "https://api.dicebear.com/7.x/bottts/svg?seed=Felix";
+
+        function selectAvatar(imgElement) {
+            document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+            imgElement.classList.add('selected');
+            myAvatar = imgElement.src;
+        }
+
+        window.onload = function() {
+            const savedName = sessionStorage.getItem('playerName');
+            const savedAvatar = sessionStorage.getItem('playerAvatar');
+            if (savedName && savedAvatar) {
+                myName = savedName;
+                myAvatar = savedAvatar;
+                showGamesLobby();
+            }
+        };
+
+        function saveName() {
+            const input = document.getElementById('username').value.trim();
+            if(!input) return alert("Nhập tên hiển thị đi bạn ơi!");
+            
+            myName = input;
+            sessionStorage.setItem('playerName', myName); 
+            sessionStorage.setItem('playerAvatar', myAvatar); 
+            
+            showGamesLobby();
+        }
+
+        function showGamesLobby() {
+            document.getElementById('step-name').style.display = 'none';
+            document.getElementById('step-games').style.display = 'block';
+            
+            document.getElementById('nav-profile').style.display = 'flex';
+            document.getElementById('nav-name').innerText = myName;
+            document.getElementById('nav-avatar').src = myAvatar;
+        }
+
+        function logout() {
+            sessionStorage.removeItem('playerName');
+            sessionStorage.removeItem('playerAvatar');
+            window.location.reload();
+        }
+
+        // ĐIỀU HƯỚNG CỜ VUA
+        function showChessOptions() {
+            document.getElementById('step-games').style.display = 'none';
+            document.getElementById('step-chess-options').style.display = 'block';
+        }
+        function backToGames() {
+            document.getElementById('step-chess-options').style.display = 'none';
+            document.getElementById('step-games').style.display = 'block';
+        }
+        function playWithBot() { window.location.href = '/chess?mode=bot'; }
+        function createRoom() {
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            window.location.href = `/chess?room=${roomId}`;
+        }
+
+        // ĐIỀU HƯỚNG UNO (MỚI THÊM)
+        function showUnoOptions() {
+            document.getElementById('step-games').style.display = 'none';
+            document.getElementById('step-uno-options').style.display = 'block';
+        }
+        function backToGamesFromUno() {
+            document.getElementById('step-uno-options').style.display = 'none';
+            document.getElementById('step-games').style.display = 'block';
+        }
+        function createUnoRoom() {
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            window.location.href = `/uno?room=${roomId}`;
+        }
     </script>
 </body>
 </html>
