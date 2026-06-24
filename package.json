@@ -1,11 +1,11 @@
 {
   "name": "office-game-portal",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-  "start": "node server.js & node bgio-server.js",
-  "dev": "concurrently \"nodemon server.js\" \"nodemon bgio-server.js\""
-},
+    "start": "concurrently \"node server.js\" \"node bgio-server.js\"",
+    "dev": "concurrently \"nodemon server.js\" \"node bgio-server.js\""
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

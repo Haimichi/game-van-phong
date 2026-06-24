@@ -4,144 +4,145 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
 
+// Cấp quyền đọc thư mục games
+app.use('/games', express.static(path.join(__dirname, 'games')));
 app.use(express.static('public'));
+
 app.get('/uno', (req, res) => res.sendFile(path.join(__dirname, 'public', 'uno', 'index.html')));
 app.get('/chess', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chess', 'index.html')));
 
-// --- DATA STORE ---
+// CHỈ CÒN LƯU DATA CỜ VUA
 const chessRooms = {}; 
-const unoRooms = {}; 
 
-function createUnoDeck() {
-    const colors = ['red', 'blue', 'green', 'yellow'];
-    const deck = [];
-    let id = 0;
-    colors.forEach(color => {
-        deck.push({ id: `c_${id++}`, color: color, value: '0' });
-        for (let i = 1; i <= 9; i++) {
-            deck.push({ id: `c_${id++}`, color: color, value: i.toString() });
-            deck.push({ id: `c_${id++}`, color: color, value: i.toString() });
-        }
-        ['Skip', 'Reverse', '+2'].forEach(action => {
-            deck.push({ id: `c_${id++}`, color: color, value: action });
-            deck.push({ id: `c_${id++}`, color: color, value: action });
-        });
-    });
-    for (let i = 0; i < 4; i++) {
-        deck.push({ id: `c_${id++}`, color: 'black', value: 'Wild' });
-        deck.push({ id: `c_${id++}`, color: 'black', value: '+4' });
-    }
-    return deck.sort(() => Math.random() - 0.5);
-}
+// ==========================================
+// CHAT SYSTEM (per room)
+// ==========================================
+const roomChats = {}; // { roomId: [{ playerID, name, text, timestamp }, ...] }
+const roomPlayers = {}; // { roomId: { playerID: playerName } } — danh sách tên người chơi đang biết trong phòng
 
 io.on('connection', (socket) => {
+    console.log(`[Socket] Client connected: ${socket.id}`);
+
+    // ==========================================
+    // CHAT EVENTS
+    // ==========================================
+    socket.on('chat:join-room', (data) => {
+        const { roomId, playerID, playerName } = data;
+        socket.join(`chat:${roomId}`);
+        socket.playerName = playerName;
+        socket.playerID = playerID;
+        socket.roomId = roomId;
+
+        // Khởi tạo chat history nếu chưa có
+        if (!roomChats[roomId]) {
+            roomChats[roomId] = [];
+        }
+        if (!roomPlayers[roomId]) {
+            roomPlayers[roomId] = {};
+        }
+        const isNewPlayer = roomPlayers[roomId][playerID] === undefined;
+        roomPlayers[roomId][playerID] = playerName;
+
+        // Gửi lịch sử chat cho player mới join
+        socket.emit('chat:history', roomChats[roomId]);
+
+        // Đồng bộ danh sách tên (playerID -> playerName) cho TẤT CẢ người trong phòng,
+        // kể cả người vừa join, để ai cũng thấy đúng tên thật của nhau (không chỉ "Player 0/1/2").
+        io.to(`chat:${roomId}`).emit('chat:roster', roomPlayers[roomId]);
+
+        // Thông báo player khác rằng có người mới join (chỉ khi đây là lần đầu join, tránh spam khi reconnect)
+        if (isNewPlayer) {
+            const joinMsg = {
+                type: 'system',
+                playerID: 'system',
+                playerName: 'Hệ thống',
+                text: `${playerName} vừa tham gia phòng`,
+                timestamp: Date.now()
+            };
+            roomChats[roomId].push(joinMsg);
+            if (roomChats[roomId].length > 200) roomChats[roomId].shift();
+            socket.to(`chat:${roomId}`).emit('chat:message', joinMsg);
+        }
+
+        console.log(`[Chat] Player ${playerID} (${playerName}) joined room ${roomId}`);
+    });
+
+    // Đổi tên hiển thị (không phát lại lịch sử / không bắn thông báo "vừa tham gia phòng")
+    socket.on('chat:rename', (data) => {
+        const { roomId, playerID, playerName } = data;
+        if (!roomId || !playerName || !playerName.trim()) return;
+        if (!roomPlayers[roomId]) roomPlayers[roomId] = {};
+        const oldName = roomPlayers[roomId][playerID];
+        const newName = playerName.trim();
+        roomPlayers[roomId][playerID] = newName;
+        socket.playerName = newName;
+
+        io.to(`chat:${roomId}`).emit('chat:roster', roomPlayers[roomId]);
+
+        if (oldName && oldName !== newName && roomChats[roomId]) {
+            const renameMsg = {
+                type: 'system',
+                playerID: 'system',
+                playerName: 'Hệ thống',
+                text: `${oldName} đã đổi tên thành ${newName}`,
+                timestamp: Date.now()
+            };
+            roomChats[roomId].push(renameMsg);
+            if (roomChats[roomId].length > 200) roomChats[roomId].shift();
+            io.to(`chat:${roomId}`).emit('chat:message', renameMsg);
+        }
+    });
+
+    socket.on('chat:send', (data) => {
+        const { roomId, playerID, playerName, text } = data;
+        
+        if (!text || !text.trim()) return;
+
+        const message = {
+            type: 'user',
+            playerID,
+            playerName,
+            text: text.trim(),
+            timestamp: Date.now()
+        };
+
+        // Lưu vào history
+        if (roomChats[roomId]) {
+            roomChats[roomId].push(message);
+            // Giữ tối đa 200 tin nhắn
+            if (roomChats[roomId].length > 200) {
+                roomChats[roomId].shift();
+            }
+        }
+
+        // Gửi cho tất cả player trong phòng (kể cả người gửi)
+        io.to(`chat:${roomId}`).emit('chat:message', message);
+
+        console.log(`[Chat] ${playerName}: ${text} (room: ${roomId})`);
+    });
+
+    socket.on('disconnect', () => {
+        if (socket.roomId && socket.playerName) {
+            io.to(`chat:${socket.roomId}`).emit('chat:message', {
+                type: 'system',
+                playerID: 'system',
+                playerName: 'Hệ thống',
+                text: `${socket.playerName} đã rời phòng`,
+                timestamp: Date.now()
+            });
+            console.log(`[Chat] ${socket.playerName} disconnected from ${socket.roomId}`);
+        }
+    });
+
     socket.on('lobby-chat', (data) => { io.emit('lobby-chat', data); });
 
     // ==========================================
-    // LOGIC GAME UNO (ĐÃ NÂNG CẤP HOST & BOTS)
-    // ==========================================
-    socket.on('join-uno', (data) => {
-        const { roomId, name, avatar } = data;
-        socket.join(roomId);
-        socket.unoRoomId = roomId;
-
-        if (!unoRooms[roomId]) {
-            // Người đầu tiên vào sẽ làm Host
-            unoRooms[roomId] = {
-                host: socket.id,
-                players: [],
-                deck: [],
-                discardPile: [],
-                status: 'waiting' 
-            };
-        }
-
-        const room = unoRooms[roomId];
-
-        // TRƯỜNG HỢP 1: VÀO PHÒNG KHI GAME ĐANG CHƠI (TÌM BOT ĐỂ THẾ CHỖ)
-        if (room.status === 'playing') {
-            const botIndex = room.players.findIndex(p => p.isBot);
-            if (botIndex !== -1) {
-                // Có Bot -> Cướp quyền Bot
-                const botHand = room.players[botIndex].hand;
-                room.players[botIndex] = { id: socket.id, name: name, avatar: avatar, hand: botHand, isBot: false };
-                
-                io.to(roomId).emit('uno-update-players', { players: room.players, host: room.host });
-                
-                // Gửi thẳng bài cho người mới
-                socket.emit('uno-game-started', {
-                    hand: botHand,
-                    topCard: room.discardPile[room.discardPile.length - 1],
-                    playersInfo: room.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, cardCount: p.hand.length, isBot: p.isBot }))
-                });
-                return;
-            } else {
-                // Không có Bot -> Báo lỗi văng ra
-                socket.emit('uno-error', 'Phòng đã đầy và đang trong trận!');
-                return;
-            }
-        }
-
-        // TRƯỜNG HỢP 2: VÀO PHÒNG CHỜ BÌNH THƯỜNG
-        room.players.push({ id: socket.id, name, avatar, hand: [], isBot: false });
-        io.to(roomId).emit('uno-update-players', { players: room.players, host: room.host });
-    });
-
-    socket.on('uno-start-game', (roomId) => {
-        const room = unoRooms[roomId];
-        // Chỉ Host mới được phép Start
-        if (!room || room.host !== socket.id) return;
-
-        // KIỂM TRA VÀ NHỒI THÊM BOT NẾU CHƯA ĐỦ 4 NGƯỜI
-        let botCount = 1;
-        while (room.players.length < 4) {
-            room.players.push({
-                id: `bot_${Math.random().toString(36).substr(2, 5)}`,
-                name: `Bot Thông Minh ${botCount}`,
-                avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=Bot${botCount}`,
-                hand: [],
-                isBot: true
-            });
-            botCount++;
-        }
-
-        room.status = 'playing';
-        room.deck = createUnoDeck();
-        room.discardPile = [];
-
-        // Chia cho mỗi người (kể cả Bot) 7 lá
-        room.players.forEach(player => {
-            player.hand = room.deck.splice(0, 7);
-        });
-
-        let firstCard = room.deck.pop();
-        while(firstCard.color === 'black') {
-            room.deck.unshift(firstCard); 
-            firstCard = room.deck.pop();
-        }
-        room.discardPile.push(firstCard);
-
-        // Phát tín hiệu bắt đầu cho tất cả người thật
-        room.players.forEach(player => {
-            if (!player.isBot) {
-                io.to(player.id).emit('uno-game-started', {
-                    hand: player.hand,
-                    topCard: firstCard,
-                    playersInfo: room.players.map(p => ({ id: p.id, name: p.name, avatar: p.avatar, cardCount: p.hand.length, isBot: p.isBot }))
-                });
-            }
-        });
-        
-        // Cập nhật lại UI người chơi để hiện Bot
-        io.to(roomId).emit('uno-update-players', { players: room.players, host: room.host });
-    });
-
-    // ==========================================
-    // LOGIC CỜ VUA
+    // LOGIC CỜ VUA (Giữ nguyên của sếp)
     // ==========================================
     socket.on('join-room', (data) => {
         const { roomId, name, avatar } = data;
-        socket.join(roomId); socket.roomId = roomId;
+        socket.join(roomId); 
+        socket.roomId = roomId;
         if (!chessRooms[roomId]) chessRooms[roomId] = { players: {} };
         chessRooms[roomId].players[socket.id] = { name, avatar, roll: null };
         const pIds = Object.keys(chessRooms[roomId].players);
@@ -149,6 +150,7 @@ io.on('connection', (socket) => {
         else if (pIds.length === 2) io.to(roomId).emit('room-status', { status: 'ready-to-roll', players: chessRooms[roomId].players });
         else socket.emit('room-status', { status: 'full' });
     });
+    
     socket.on('roll-dice', (roomId) => {
         const room = chessRooms[roomId];
         if (!room) return;
@@ -181,21 +183,8 @@ io.on('connection', (socket) => {
             socket.to(socket.roomId).emit('opponent-resigned', "Đối thủ");
             if (Object.keys(chessRooms[socket.roomId].players).length === 0) delete chessRooms[socket.roomId];
         }
-        if (socket.unoRoomId && unoRooms[socket.unoRoomId]) {
-            const room = unoRooms[socket.unoRoomId];
-            room.players = room.players.filter(p => p.id !== socket.id);
-            
-            // Nếu Chủ phòng thoát, nhường quyền Host cho người kế tiếp
-            if (room.host === socket.id) {
-                const nextRealPlayer = room.players.find(p => !p.isBot);
-                if (nextRealPlayer) room.host = nextRealPlayer.id;
-            }
-            
-            io.to(socket.unoRoomId).emit('uno-update-players', { players: room.players, host: room.host });
-            if (room.players.length === 0 || room.players.every(p => p.isBot)) delete unoRooms[socket.unoRoomId];
-        }
     });
 });
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`));
+http.listen(PORT, () => console.log(`🚀 Server Sảnh (Express) chạy tại: http://localhost:${PORT}`));
