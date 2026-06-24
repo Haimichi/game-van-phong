@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dò Mìn Đối Kháng | GameHub</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+    :root {
+        --bg-deep: #0b0f1a;
+        --bg-panel: #121829;
+        --bg-panel-2: #161e35;
+        --bg-elevated: #1b2440;
+        --border: #263256;
+        --border-soft: #1d2740;
+
+        --text-main: #eef1fb;
+        --text-muted: #8b95b8;
+        --text-faint: #5d6690;
+
+        --accent: #5eead4;
+        --accent-strong: #2dd4bf;
+        --accent-soft: rgba(94, 234, 212, 0.12);
+
+        --danger: #f87171;
+        --danger-soft: rgba(248, 113, 113, 0.14);
+        --warn: #fbbf24;
+
+        --radius-lg: 20px;
+        --radius-md: 14px;
+        --radius-sm: 10px;
+
+        --cell-size: 28px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at 15% 0%, #15203f 0%, var(--bg-deep) 45%) fixed, var(--bg-deep);
+        color: var(--text-main);
+        min-height: 100vh;
+        line-height: 1.5;
+    }
+    ::selection { background: var(--accent-soft); }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; }
+
+    /* ===== Top bar ===== */
+    .topbar {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 20px;
+        background: rgba(11,15,26,0.82);
+        backdrop-filter: blur(14px);
+        border-bottom: 1px solid var(--border-soft);
+        position: sticky; top: 0; z-index: 40;
+        flex-wrap: wrap; gap: 10px;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .back-link {
+        display: flex; align-items: center; gap: 6px;
+        font-size: 13px; font-weight: 700; color: var(--text-muted);
+        padding: 7px 12px; border-radius: 50px; border: 1px solid var(--border);
+        transition: 0.15s;
+    }
+    .back-link:hover { color: var(--text-main); border-color: var(--text-faint); }
+    .game-title { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 7px; }
+
+    .room-badge {
+        display: none; align-items: center; gap: 8px;
+        background: var(--bg-panel); border: 1px solid var(--border);
+        padding: 6px 8px 6px 12px; border-radius: 50px; font-size: 12.5px;
+    }
+    .room-badge.show { display: flex; }
+    .room-badge .room-code { font-weight: 800; letter-spacing: 1px; color: var(--accent); }
+    .room-badge button {
+        background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-muted);
+        font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 50px;
+    }
+    .room-badge button:hover { color: var(--text-main); border-color: var(--text-faint); }
+
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .hud-pill {
+        display: flex; align-items: center; gap: 6px;
+        background: var(--bg-panel); border: 1px solid var(--border);
+        padding: 7px 13px; border-radius: 50px; font-size: 13px; font-weight: 700;
+    }
+    .hud-pill .ic { font-size: 14px; }
+    #hud-timer { min-width: 38px; text-align: center; }
+
+    .icon-btn {
+        background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-muted);
+        width: 36px; height: 36px; border-radius: 50%; font-size: 15px;
+        display: flex; align-items: center; justify-content: center; transition: 0.15s;
+    }
+    .icon-btn:hover { color: var(--text-main); border-color: var(--text-faint); }
+
+    /* ===== Layout ===== */
+    .layout {
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 0;
+        max-width: 1280px;
+        margin: 0 auto;
+        min-height: calc(100vh - 65px);
+    }
+    .main-area {
+        padding: 28px 20px 60px;
+        display: flex; flex-direction: column; align-items: center; gap: 18px;
+        overflow-x: auto;
+    }
+
+    /* ===== Opponent strip (online mode) ===== */
+    .vs-strip {
+        display: none;
+        width: 100%; max-width: 560px;
+        gap: 12px;
+    }
+    .vs-strip.show { display: flex; }
+    .player-chip {
+        flex: 1; display: flex; align-items: center; gap: 10px;
+        background: var(--bg-panel); border: 1px solid var(--border);
+        border-radius: var(--radius-md); padding: 10px 14px;
+        position: relative; overflow: hidden;
+    }
+    .player-chip.me { border-color: var(--accent); }
+    .player-chip img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--bg-elevated); flex-shrink: 0; }
+    .player-chip .pc-info { min-width: 0; flex: 1; }
+    .player-chip .pc-name { font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .player-chip .pc-status { font-size: 10.5px; color: var(--text-faint); font-weight: 600; }
+    .player-chip .pc-bar { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--accent); transition: width 0.3s ease; width: 0%; }
+    .player-chip.opp .pc-bar { background: #fb923c; }
+    .player-chip.lost { border-color: var(--danger); }
+    .player-chip.lost .pc-status { color: var(--danger); }
+    .player-chip.won { border-color: var(--accent); }
+    .player-chip.won .pc-status { color: var(--accent); }
+    .vs-label {
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 800; color: var(--text-faint);
+        width: 26px;
+    }
+
+    /* ===== Board ===== */
+    .board-wrap {
+        background: var(--bg-panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 14px;
+        box-shadow: 0 20px 45px -15px rgba(0,0,0,0.6);
+    }
+    #board {
+        display: grid;
+        gap: 2px;
+        background: var(--bg-deep);
+        border-radius: var(--radius-sm);
+        padding: 6px;
+        touch-action: manipulation;
+    }
+    .cell {
+        width: var(--cell-size); height: var(--cell-size);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; font-weight: 800;
+        background: var(--bg-elevated);
+        border-radius: 5px;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.1s ease, transform 0.08s ease;
+    }
+    .cell:hover:not(.opened):not(.disabled) { background: #243056; }
+    .cell:active:not(.opened):not(.disabled) { transform: scale(0.92); }
+    .cell.opened { background: var(--bg-panel-2); cursor: default; box-shadow: inset 0 0 0 1px var(--border-soft); }
+    .cell.flagged { background: var(--bg-elevated); }
+    .cell.mine-hit { background: var(--danger); animation: shake 0.4s ease; }
+    .cell.mine-revealed { background: var(--bg-elevated); opacity: 0.7; }
+    .cell.disabled { cursor: default; opacity: 0.55; }
+    .cell.n1 { color: #60a5fa; } .cell.n2 { color: #4ade80; } .cell.n3 { color: #f87171; }
+    .cell.n4 { color: #a78bfa; } .cell.n5 { color: #fb923c; } .cell.n6 { color: #2dd4bf; }
+    .cell.n7 { color: #f472b6; } .cell.n8 { color: #cbd5e1; }
+
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-3px); }
+        75% { transform: translateX(3px); }
+    }
+
+    .board-hint { font-size: 12px; color: var(--text-faint); text-align: center; max-width: 420px; }
+
+    /* ===== Result overlay ===== */
+    .result-overlay {
+        display: none;
+        position: fixed; inset: 0; z-index: 100;
+        background: rgba(8, 11, 20, 0.72);
+        backdrop-filter: blur(4px);
+        align-items: center; justify-content: center;
+    }
+    .result-overlay.show { display: flex; }
+    .result-card {
+        background: linear-gradient(180deg, var(--bg-panel-2) 0%, var(--bg-panel) 100%);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 38px 36px;
+        text-align: center;
+        max-width: 380px;
+        box-shadow: 0 30px 60px -15px rgba(0,0,0,0.7);
+    }
+    .result-emoji { font-size: 52px; margin-bottom: 14px; }
+    .result-title { font-size: 23px; font-weight: 800; margin-bottom: 6px; }
+    .result-title.win { color: var(--accent); }
+    .result-title.lose { color: var(--danger); }
+    .result-desc { font-size: 13.5px; color: var(--text-muted); margin-bottom: 24px; }
+    .result-actions { display: flex; flex-direction: column; gap: 10px; }
+    .btn-main {
+        padding: 13px 20px; background: var(--accent); color: #06241f;
+        border: none; border-radius: var(--radius-sm); font-size: 14.5px; font-weight: 800;
+        transition: 0.15s ease;
+    }
+    .btn-main:hover { background: var(--accent-strong); transform: translateY(-1px); }
+    .btn-outline { background: transparent; border: 1.5px solid var(--border); color: var(--text-main); }
+    .btn-outline:hover { background: var(--bg-elevated); border-color: var(--text-faint); transform: none; }
+
+    /* ===== Chat panel ===== */
+    .chat-panel {
+        background: var(--bg-panel);
+        border-left: 1px solid var(--border-soft);
+        display: flex; flex-direction: column;
+        height: calc(100vh - 65px);
+        position: sticky; top: 65px;
+    }
+    .chat-panel.hidden-mode { display: none; }
+    .chat-head {
+        padding: 16px 18px; border-bottom: 1px solid var(--border-soft);
+        font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 8px;
+    }
+    .chat-head .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+    .chat-messages {
+        flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .chat-messages::-webkit-scrollbar { width: 5px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+    .msg { max-width: 88%; }
+    .msg.system { align-self: center; max-width: 100%; }
+    .msg.system .msg-text {
+        font-size: 11.5px; color: var(--text-faint); text-align: center; font-style: italic;
+        background: none; padding: 2px 0;
+    }
+    .msg.me { align-self: flex-end; }
+    .msg .msg-name { font-size: 10.5px; font-weight: 700; color: var(--text-faint); margin-bottom: 3px; padding: 0 4px; }
+    .msg.me .msg-name { text-align: right; }
+    .msg .msg-text {
+        background: var(--bg-elevated); padding: 9px 12px; border-radius: 12px;
+        font-size: 13.5px; line-height: 1.4; word-break: break-word;
+    }
+    .msg.me .msg-text { background: var(--accent-soft); color: var(--text-main); }
+    .msg .msg-text.emoji-big { font-size: 28px; background: none; padding: 0 4px; display: inline-block; }
+
+    .chat-input-row {
+        padding: 12px 14px; border-top: 1px solid var(--border-soft);
+        display: flex; gap: 8px; position: relative;
+    }
+    .chat-input-row input[type="text"] {
+        flex: 1; background: var(--bg-deep); border: 1.5px solid var(--border);
+        color: var(--text-main); padding: 10px 14px; border-radius: 50px;
+        font-size: 13.5px; outline: none; font-family: inherit;
+    }
+    .chat-input-row input[type="text"]:focus { border-color: var(--accent); }
+    .chat-input-row button.send-btn {
+        background: var(--accent); color: #06241f; border: none;
+        width: 38px; height: 38px; border-radius: 50%; font-size: 15px; flex-shrink: 0;
+    }
+    .chat-input-row button.emoji-toggle {
+        background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-muted);
+        width: 38px; height: 38px; border-radius: 50%; font-size: 16px; flex-shrink: 0;
+    }
+
+    .emoji-picker {
+        display: none;
+        position: absolute; bottom: 58px; right: 14px;
+        background: var(--bg-elevated); border: 1px solid var(--border);
+        border-radius: var(--radius-md); padding: 10px;
+        grid-template-columns: repeat(6, 1fr); gap: 4px;
+        box-shadow: 0 12px 30px -8px rgba(0,0,0,0.5);
+        width: 230px;
+    }
+    .emoji-picker.show { display: grid; }
+    .emoji-picker button {
+        background: none; border: none; font-size: 19px; padding: 5px;
+        border-radius: 8px; transition: 0.1s;
+    }
+    .emoji-picker button:hover { background: var(--bg-panel); }
+
+    .quick-reacts { display: flex; gap: 6px; padding: 0 14px 10px; flex-wrap: wrap; }
+    .quick-reacts button {
+        background: var(--bg-elevated); border: 1px solid var(--border);
+        font-size: 15px; padding: 5px 9px; border-radius: 50px;
+    }
+    .quick-reacts button:hover { border-color: var(--text-faint); }
+
+    /* Mobile chat toggle */
+    .chat-fab {
+        display: none;
+        position: fixed; bottom: 20px; right: 20px; z-index: 60;
+        width: 54px; height: 54px; border-radius: 50%;
+        background: var(--accent); color: #06241f; border: none;
+        font-size: 22px; box-shadow: 0 10px 25px -6px rgba(0,0,0,0.5);
+        align-items: center; justify-content: center;
+    }
+    .chat-fab .badge {
+        position: absolute; top: -4px; right: -4px;
+        background: var(--danger); color: white; font-size: 10px; font-weight: 800;
+        min-width: 18px; height: 18px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; padding: 0 3px;
+    }
+
+    @media (max-width: 880px) {
+        .layout { grid-template-columns: 1fr; }
+        .chat-panel {
+            position: fixed; inset: 0; top: auto; height: 70vh;
+            transform: translateY(100%); transition: transform 0.25s ease;
+            z-index: 70; border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            border-left: none; border-top: 1px solid var(--border);
+        }
+        .chat-panel.open { transform: translateY(0); }
+        .chat-fab { display: flex; }
+        .chat-fab.hide { display: none; }
+        :root { --cell-size: 24px; }
+    }
+    @media (max-width: 420px) {
+        :root { --cell-size: 20px; }
+        .cell { font-size: 11px; }
+    }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="topbar-left">
+        <a class="back-link" href="/">← Sảnh</a>
+        <div class="game-title">💣 Dò Mìn</div>
+        <div class="room-badge" id="room-badge">
+            <span>Mã phòng: <span class="room-code" id="room-code-display"></span></span>
+            <button onclick="copyRoomCode()">Copy</button>
+        </div>
+    </div>
+    <div class="topbar-right">
+        <div class="hud-pill"><span class="ic">🚩</span><span id="hud-flags">0</span></div>
+        <div class="hud-pill"><span class="ic">⏱️</span><span id="hud-timer">0</span></div>
+        <button class="icon-btn" id="btn-resign" title="Đầu hàng" style="display:none;" onclick="handleResignClick()">🏳️</button>
+        <button class="icon-btn" id="btn-reset" title="Chơi lại" onclick="handleResetClick()">↻</button>
+    </div>
+</div>
+
+<div class="layout">
+    <div class="main-area">
+
+        <div class="vs-strip" id="vs-strip">
+            <div class="player-chip me" id="chip-me">
+                <img id="chip-me-avatar" src="" alt="">
+                <div class="pc-info">
+                    <div class="pc-name" id="chip-me-name">Bạn</div>
+                    <div class="pc-status" id="chip-me-status">Đang dò...</div>
+                </div>
+                <div class="pc-bar" id="chip-me-bar"></div>
+            </div>
+            <div class="vs-label">VS</div>
+            <div class="player-chip opp" id="chip-opp">
+                <img id="chip-opp-avatar" src="" alt="">
+                <div class="pc-info">
+                    <div class="pc-name" id="chip-opp-name">Đang chờ...</div>
+                    <div class="pc-status" id="chip-opp-status">—</div>
+                </div>
+                <div class="pc-bar" id="chip-opp-bar"></div>
+            </div>
+        </div>
+
+        <div class="board-wrap">
+            <div id="board"></div>
+        </div>
+
+        <p class="board-hint">Click để mở ô · Click phải (hoặc giữ trên điện thoại) để cắm cờ 🚩 nghi ngờ có mìn</p>
+    </div>
+
+    <div class="chat-panel" id="chat-panel">
+        <div class="chat-head"><span class="dot"></span> Trò chuyện</div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="quick-reacts">
+            <button onclick="sendQuickEmoji('😂')">😂</button>
+            <button onclick="sendQuickEmoji('😱')">😱</button>
+            <button onclick="sendQuickEmoji('🔥')">🔥</button>
+            <button onclick="sendQuickEmoji('💀')">💀</button>
+            <button onclick="sendQuickEmoji('👏')">👏</button>
+            <button onclick="sendQuickEmoji('😤')">😤</button>
+        </div>
+        <div class="chat-input-row">
+            <button class="emoji-toggle" onclick="toggleEmojiPicker()">😊</button>
+            <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." maxlength="200" onkeypress="if(event.key === 'Enter') sendChatMessage()">
+            <button class="send-btn" onclick="sendChatMessage()">➤</button>
+            <div class="emoji-picker" id="emoji-picker"></div>
+        </div>
+    </div>
+</div>
+
+<button class="chat-fab" id="chat-fab" onclick="toggleChatPanel()">
+    💬 <span class="badge" id="chat-badge" style="display:none;">0</span>
+</button>
+
+<div class="result-overlay" id="result-overlay">
+    <div class="result-card">
+        <div class="result-emoji" id="result-emoji">🎉</div>
+        <div class="result-title" id="result-title">Bạn thắng!</div>
+        <div class="result-desc" id="result-desc">Đối thủ đã đụng mìn trước bạn.</div>
+        <div class="result-actions" id="result-actions"></div>
+    </div>
+</div>
+
+<script>
+    // ============================================================
+    // STATE & SETUP
+    // ============================================================
+    const urlParams = new URLSearchParams(window.location.search);
+    const mode = urlParams.get('mode');           // 'solo' nếu chơi một mình
+    const roomId = urlParams.get('room');          // mã phòng nếu online
+    const isHost = urlParams.get('host') === '1';
+    const isOnline = !mode && !!roomId;
+    let diffParam = urlParams.get('diff') || 'easy';
+
+    const DIFF_CONFIG = {
+        easy:   { rows: 9,  cols: 9,  mines: 10 },
+        medium: { rows: 16, cols: 16, mines: 40 },
+        hard:   { rows: 16, cols: 30, mines: 99 }
+    };
+
+    const myName = sessionStorage.getItem('playerName') || 'Khách';
+    const myAvatar = sessionStorage.getItem('playerAvatar') || 'https://api.dicebear.com/7.x/bottts/svg?seed=Felix';
+    if (!sessionStorage.getItem('playerName')) {
+        // Chưa đặt tên/avatar -> quay lại sảnh để thiết lập trước, tránh phá vỡ tính nhất quán UX
+        window.location.href = '/';
+    }
+
+    let rows, cols, mineCount;
+    let board = [];           // trạng thái cờ của TÔI: 'hidden' | 'opened' | 'flagged'
+    let cellValues = [];      // số mìn xung quanh (chỉ biết khi đã mở, solo tính local)
+    let mineSetLocal = null;  // Set "r-c" — chỉ tồn tại ở client cho chế độ solo
+    let openedCount = 0;
+    let flagCount = 0;
+    let totalSafeCells = 0;
+    let gameOver = false;
+    let timerInterval = null;
+    let secondsElapsed = 0;
+    let firstClickDone = false; // dùng cho solo: đảm bảo ô đầu luôn an toàn
+
+    let socket = null;
+    let myStatus = 'playing';
+
+    // ============================================================
+    // KHỞI TẠO BÀN CỜ (DOM)
+    // ============================================================
+    function buildBoardDom() {
+        const boardEl = document.getElementById('board');
+        boardEl.innerHTML = '';
+        boardEl.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
+        board = [];
+        cellValues = [];
+        for (let r = 0; r < rows; r++) {
+            const rowState = [];
+            const rowVals = [];
+            for (let c = 0; c < cols; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.r = r;
+                cell.dataset.c = c;
+                cell.addEventListener('click', () => handleCellClick(r, c));
+                cell.addEventListener('contextmenu', (e) => { e.preventDefault(); handleCellFlag(r, c); });
+                // Hỗ trợ long-press cho mobile để cắm cờ
+                let pressTimer = null;
+                cell.addEventListener('touchstart', () => {
+                    pressTimer = setTimeout(() => handleCellFlag(r, c), 480);
+                });
+                cell.addEventListener('touchend', () => clearTimeout(pressTimer));
+                boardEl.appendChild(cell);
+                rowState.push('hidden');
+                rowVals.push(null);
+            }
+            board.push(rowState);
+            cellValues.push(rowVals);
+        }
+        openedCount = 0;
+        flagCount = 0;
+        updateFlagHud();
+    }
+
+    function getCellEl(r, c) {
+        return document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+    }
+
+    function updateFlagHud() {
+        document.getElementById('hud-flags').textContent = `${flagCount}/${mineCount}`;
+    }
+
+    function startTimer() {
+        stopTimer();
+        secondsElapsed = 0;
+        document.getElementById('hud-timer').textContent = '0';
+        timerInterval = setInterval(() => {
+            secondsElapsed++;
+            document.getElementById('hud-timer').textContent = secondsElapsed;
+        }, 1000);
+    }
+    function stopTimer() { if (timerInterval) clearInterval(timerInterval); timerInterval = null; }
+
+    // ============================================================
+    // CHẾ ĐỘ CHƠI ĐƠN (SOLO) — toàn bộ logic chạy ở client
+    // ============================================================
+    function initSolo() {
+        const cfg = DIFF_CONFIG[diffParam] || DIFF_CONFIG.easy;
+        rows = cfg.rows; cols = cfg.cols; mineCount = cfg.mines;
+        totalSafeCells = rows * cols - mineCount;
+        mineSetLocal = null; // sinh sau click đầu tiên để đảm bảo an toàn
+        firstClickDone = false;
+        gameOver = false;
+        buildBoardDom();
+        startTimer();
+        document.getElementById('vs-strip').classList.remove('show');
+        document.getElementById('chat-panel').classList.add('hidden-mode');
+        document.getElementById('chat-fab').classList.add('hide');
+    }
+
+    function generateSoloMines(avoidR, avoidC) {
+        const set = new Set();
+        const total = rows * cols;
+        while (set.size < mineCount) {
+            const idx = Math.floor(Math.random() * total);
+            const r = Math.floor(idx / cols), c = idx % cols;
+            if (Math.abs(r - avoidR) <= 1 && Math.abs(c - avoidC) <= 1) continue; // tránh nổ ngay click đầu
+            set.add(`${r}-${c}`);
+        }
+        return set;
+    }
+
+    function soloCountAdjacent(r, c) {
+        let n = 0;
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+            if (!dr && !dc) continue;
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && mineSetLocal.has(`${nr}-${nc}`)) n++;
+        }
+        return n;
+    }
+
+    function soloFloodReveal(startR, startC) {
+        const stack = [[startR, startC]];
+        const visited = new Set();
+        while (stack.length) {
+            const [r, c] = stack.pop();
+            const key = `${r}-${c}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+            if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+            if (board[r][c] !== 'hidden') continue;
+            if (mineSetLocal.has(key)) continue;
+            const val = soloCountAdjacent(r, c);
+            openCellUi(r, c, val);
+            if (val === 0) {
+                for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+                    if (!dr && !dc) continue;
+                    stack.push([r + dr, c + dc]);
+                }
+            }
+        }
+    }
+
+    function handleSoloClick(r, c) {
+        if (gameOver || board[r][c] !== 'hidden') return;
+
+        if (!firstClickDone) {
+            mineSetLocal = generateSoloMines(r, c);
+            firstClickDone = true;
+        }
+
+        const key = `${r}-${c}`;
+        if (mineSetLocal.has(key)) {
+            revealAllMinesUi(mineSetLocal, r, c);
+            endGame('lose', 'hit-mine');
+            return;
+        }
+        soloFloodReveal(r, c);
+        if (openedCount >= totalSafeCells) endGame('win', 'cleared-board');
+    }
+
+    function handleSoloFlag(r, c) {
+        if (gameOver || board[r][c] === 'opened') return;
+        const el = getCellEl(r, c);
+        if (board[r][c] === 'flagged') {
+            board[r][c] = 'hidden';
+            el.classList.remove('flagged');
+            el.textContent = '';
+            flagCount--;
+        } else {
+            board[r][c] = 'flagged';
+            el.classList.add('flagged');
+            el.textContent = '🚩';
+            flagCount++;
+        }
+        updateFlagHud();
+    }
+
+    // ============================================================
+    // UI HELPERS DÙNG CHUNG
+    // ============================================================
+    function openCellUi(r, c, value) {
+        if (board[r][c] === 'opened') return;
+        board[r][c] = 'opened';
+        openedCount++;
+        const el = getCellEl(r, c);
+        el.classList.add('opened');
+        el.classList.remove('flagged');
+        if (value > 0) {
+            el.textContent = value;
+            el.classList.add(`n${value}`);
+        } else {
+            el.textContent = '';
+        }
+    }
+
+    function revealAllMinesUi(mineSet, hitR, hitC) {
+        mineSet.forEach(key => {
+            const [r, c] = key.split('-').map(Number);
+            const el = getCellEl(r, c);
+            if (!el) return;
+            if (r === hitR && c === hitC) {
+                el.classList.add('mine-hit');
+                el.textContent = '💥';
+            } else if (board[r][c] !== 'opened') {
+                el.classList.add('mine-revealed');
+                el.textContent = '💣';
+            }
+        });
+    }
+
+    function disableBoard() {
+        document.querySelectorAll('.cell').forEach(el => el.classList.add('disabled'));
+    }
+
+    // ============================================================
+    // CHẾ ĐỘ ĐỐI KHÁNG ONLINE
+    // ============================================================
+    function initOnline() {
+        socket = io();
+        document.getElementById('room-badge').classList.add('show');
+        document.getElementById('room-code-display').textContent = roomId;
+        document.getElementById('vs-strip').classList.add('show');
+        document.getElementById('chat-panel').classList.remove('hidden-mode');
+        document.getElementById('chat-fab').classList.remove('hide');
+        document.getElementById('btn-resign').style.display = 'flex';
+
+        document.getElementById('chip-me-avatar').src = myAvatar;
+        document.getElementById('chip-me-name').textContent = myName;
+
+        socket.emit('mines:join-room', { roomId, name: myName, avatar: myAvatar, diff: diffParam });
+        socket.emit('chat:join-room', { roomId: `mines-${roomId}`, playerID: socket.id, playerName: myName });
+
+        socket.on('connect', () => {
+            socket.emit('chat:join-room', { roomId: `mines-${roomId}`, playerID: socket.id, playerName: myName });
+        });
+
+        socket.on('mines:room-full', () => {
+            alert('Phòng này đã có đủ 2 người chơi rồi 😅');
+            window.location.href = '/';
+        });
+
+        socket.on('mines:init', (data) => {
+            rows = data.rows; cols = data.cols; mineCount = data.mineCount;
+            diffParam = data.diff;
+            totalSafeCells = rows * cols - mineCount;
+            buildBoardDom();
+            renderPlayersFromServer(data.players, socket.id);
+        });
+
+        socket.on('mines:waiting', () => {
+            document.getElementById('chip-opp-name').textContent = 'Đang chờ đối thủ...';
+            document.getElementById('chip-opp-status').textContent = `Mã phòng: ${roomId}`;
+            pushSystemMessage(`Phòng đã tạo. Chia sẻ mã "${roomId}" cho đối thủ để bắt đầu!`);
+        });
+
+        socket.on('mines:players-update', (players) => {
+            renderPlayersFromServer(players, socket.id);
+        });
+
+        socket.on('mines:start', () => {
+            gameOver = false;
+            firstClickDone = true; // online: server đã sinh mìn sẵn
+            buildBoardDom(); // đảm bảo bàn cờ sạch, kể cả khi server vừa âm thầm reset mìn
+            startTimer();
+            pushSystemMessage('Cả hai đã sẵn sàng — bắt đầu dò mìn! 💣');
+        });
+
+        socket.on('mines:reveal-result', (data) => {
+            data.opened.forEach(cell => openCellUi(cell.r, cell.c, cell.value));
+            updateMyProgressBar();
+        });
+
+        socket.on('mines:opponent-progress', (data) => {
+            const pct = Math.min(100, Math.round((data.openedCount / data.totalSafeCells) * 100));
+            document.getElementById('chip-opp-bar').style.width = pct + '%';
+        });
+
+        socket.on('mines:opponent-flag', (data) => {
+            // Chỉ hiển thị thông tin nhẹ, không có bàn riêng của đối thủ nên ta show ở status text
+        });
+
+        socket.on('mines:player-hit-mine', (data) => {
+            if (data.playerId === socket.id) {
+                revealAllMinesUi(new Set(data.mines.map(m => `${m.r}-${m.c}`)), data.r, data.c);
+            } else {
+                document.getElementById('chip-opp-status').textContent = '💥 Vừa đụng mìn!';
+                document.getElementById('chip-opp').classList.add('lost');
+            }
+        });
+
+        socket.on('mines:game-result', (data) => {
+            stopTimer();
+            disableBoard();
+            gameOver = true;
+            showResult(data.result, data.reason, true);
+        });
+
+        socket.on('mines:rematch-start', (data) => {
+            rows = data.rows; cols = data.cols; mineCount = data.mineCount; diffParam = data.diff;
+            totalSafeCells = rows * cols - mineCount;
+            gameOver = false;
+            document.getElementById('result-overlay').classList.remove('show');
+            document.getElementById('chip-opp').classList.remove('lost', 'won');
+            document.getElementById('chip-me').classList.remove('lost', 'won');
+            document.getElementById('chip-opp-bar').style.width = '0%';
+            document.getElementById('chip-me-bar').style.width = '0%';
+            buildBoardDom();
+            startTimer();
+            pushSystemMessage('Trận đấu mới bắt đầu — chiến tiếp nào! 🔥');
+        });
+
+        socket.on('mines:opponent-left', () => {
+            document.getElementById('chip-opp-name').textContent = 'Đã rời phòng';
+            document.getElementById('chip-opp-status').textContent = '—';
+            pushSystemMessage('Đối thủ đã rời phòng.');
+        });
+
+        // ---- Chat ----
+        socket.on('chat:history', (history) => {
+            document.getElementById('chat-messages').innerHTML = '';
+            history.forEach(renderChatMessage);
+        });
+        socket.on('chat:message', (msg) => {
+            renderChatMessage(msg);
+            if (!document.getElementById('chat-panel').classList.contains('open') && window.innerWidth <= 880) {
+                bumpChatBadge();
+            }
+        });
+    }
+
+    function renderPlayersFromServer(players, myId) {
+        const ids = Object.keys(players);
+        const me = players[myId];
+        const oppId = ids.find(id => id !== myId);
+        if (me) {
+            document.getElementById('chip-me-name').textContent = me.name;
+            document.getElementById('chip-me-avatar').src = me.avatar;
+        }
+        if (oppId) {
+            const opp = players[oppId];
+            document.getElementById('chip-opp-name').textContent = opp.name;
+            document.getElementById('chip-opp-avatar').src = opp.avatar;
+            document.getElementById('chip-opp-status').textContent = 'Đang dò...';
+        }
+    }
+
+    function updateMyProgressBar() {
+        const pct = Math.min(100, Math.round((openedCount / totalSafeCells) * 100));
+        document.getElementById('chip-me-bar').style.width = pct + '%';
+    }
+
+    function handleCellClick(r, c) {
+        if (gameOver) return;
+        if (mode === 'solo') {
+            handleSoloClick(r, c);
+        } else if (isOnline) {
+            if (board[r][c] !== 'hidden') return;
+            socket.emit('mines:reveal', { roomId, r, c });
+        }
+    }
+    function handleCellFlag(r, c) {
+        if (gameOver) return;
+        if (mode === 'solo') {
+            handleSoloFlag(r, c);
+        } else if (isOnline) {
+            const el = getCellEl(r, c);
+            if (board[r][c] === 'opened') return;
+            if (board[r][c] === 'flagged') {
+                board[r][c] = 'hidden'; el.classList.remove('flagged'); el.textContent = ''; flagCount--;
+            } else {
+                board[r][c] = 'flagged'; el.classList.add('flagged'); el.textContent = '🚩'; flagCount++;
+            }
+            updateFlagHud();
+            socket.emit('mines:flag', { roomId, r, c, flagged: board[r][c] === 'flagged' });
+        }
+    }
+
+    function endGame(result, reason) {
+        stopTimer();
+        gameOver = true;
+        disableBoard();
+        showResult(result, reason, false);
+    }
+
+    function showResult(result, reason, online) {
+        const overlay = document.getElementById('result-overlay');
+        const emoji = document.getElementById('result-emoji');
+        const title = document.getElementById('result-title');
+        const desc = document.getElementById('result-desc');
+        const actions = document.getElementById('result-actions');
+
+        const win = result === 'win';
+        emoji.textContent = win ? '🎉' : '💥';
+        title.textContent = win ? 'Bạn thắng!' : 'Bạn thua rồi!';
+        title.className = 'result-title ' + (win ? 'win' : 'lose');
+
+        const reasonText = {
+            'hit-mine': 'Bạn đã đụng phải mìn.',
+            'cleared-board': `Bạn đã dò sạch bàn cờ trong ${secondsElapsed}s!`,
+            'opponent-hit-mine': 'Đối thủ đã đụng mìn trước bạn — bạn thắng!',
+            'opponent-cleared-board': 'Đối thủ đã dò sạch bàn cờ trước bạn.',
+            'opponent-resigned': 'Đối thủ đã đầu hàng — bạn thắng!',
+            'resigned': 'Bạn đã đầu hàng.'
+        };
+        desc.textContent = reasonText[reason] || (win ? 'Chúc mừng bạn!' : 'Chơi lại để gỡ gạc nào!');
+
+        actions.innerHTML = '';
+        if (online) {
+            const rematchBtn = document.createElement('button');
+            rematchBtn.className = 'btn-main'; rematchBtn.textContent = '🔁 Đấu lại';
+            rematchBtn.onclick = () => socket.emit('mines:rematch', { roomId, diff: diffParam });
+            actions.appendChild(rematchBtn);
+        } else {
+            const retryBtn = document.createElement('button');
+            retryBtn.className = 'btn-main'; retryBtn.textContent = '🔁 Chơi lại';
+            retryBtn.onclick = () => { overlay.classList.remove('show'); initSolo(); };
+            actions.appendChild(retryBtn);
+        }
+        const lobbyBtn = document.createElement('button');
+        lobbyBtn.className = 'btn-main btn-outline'; lobbyBtn.textContent = '🔙 Về Sảnh Chính';
+        lobbyBtn.onclick = () => window.location.href = '/';
+        actions.appendChild(lobbyBtn);
+
+        overlay.classList.add('show');
+    }
+
+    function handleResetClick() {
+        if (mode === 'solo') {
+            document.getElementById('result-overlay').classList.remove('show');
+            initSolo();
+        } else if (isOnline) {
+            if (confirm('Bạn có chắc muốn xin đấu lại không?')) {
+                socket.emit('mines:rematch', { roomId, diff: diffParam });
+            }
+        }
+    }
+
+    function handleResignClick() {
+        if (!isOnline || gameOver) return;
+        if (confirm('Bạn có chắc muốn đầu hàng? Đối thủ sẽ thắng ngay.')) {
+            socket.emit('mines:resign', { roomId });
+        }
+    }
+
+    function copyRoomCode() {
+        navigator.clipboard.writeText(roomId).then(() => {
+            const btn = document.querySelector('.room-badge button');
+            const old = btn.textContent;
+            btn.textContent = 'Đã chép!';
+            setTimeout(() => btn.textContent = old, 1500);
+        });
+    }
+
+    // ============================================================
+    // CHAT + EMOJI
+    // ============================================================
+    const EMOJI_LIST = ['😀','😂','😎','😱','😭','🤔','😤','🔥','💀','👏','🎉','💣','🚩','💪','🙏','😏','🥳','👀','🤯','🫡','😈','🤡','💯','❤️'];
+
+    function buildEmojiPicker() {
+        const picker = document.getElementById('emoji-picker');
+        picker.innerHTML = '';
+        EMOJI_LIST.forEach(e => {
+            const btn = document.createElement('button');
+            btn.textContent = e;
+            btn.onclick = () => {
+                document.getElementById('chat-input').value += e;
+                document.getElementById('emoji-picker').classList.remove('show');
+                document.getElementById('chat-input').focus();
+            };
+            picker.appendChild(btn);
+        });
+    }
+    function toggleEmojiPicker() {
+        document.getElementById('emoji-picker').classList.toggle('show');
+    }
+    document.addEventListener('click', (e) => {
+        const picker = document.getElementById('emoji-picker');
+        if (!picker.contains(e.target) && e.target.id !== 'chat-input' && !e.target.closest('.emoji-toggle')) {
+            picker.classList.remove('show');
+        }
+    });
+
+    function sendChatMessage() {
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        if (!text || !socket) return;
+        socket.emit('chat:send', { roomId: `mines-${roomId}`, playerID: socket.id, playerName: myName, text });
+        input.value = '';
+    }
+    function sendQuickEmoji(emoji) {
+        if (!socket) return;
+        socket.emit('chat:send', { roomId: `mines-${roomId}`, playerID: socket.id, playerName: myName, text: emoji });
+    }
+
+    function renderChatMessage(msg) {
+        const container = document.getElementById('chat-messages');
+        const div = document.createElement('div');
+        const isMe = socket && msg.playerID === socket.id;
+        div.className = 'msg ' + (msg.type === 'system' ? 'system' : (isMe ? 'me' : 'them'));
+
+        const isPureEmoji = msg.type === 'user' && /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F?)+$/u.test(msg.text) && msg.text.length <= 8;
+
+        if (msg.type !== 'system') {
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'msg-name';
+            nameDiv.textContent = isMe ? 'Bạn' : msg.playerName;
+            div.appendChild(nameDiv);
+        }
+        const textDiv = document.createElement('div');
+        textDiv.className = 'msg-text' + (isPureEmoji ? ' emoji-big' : '');
+        textDiv.textContent = msg.text;
+        div.appendChild(textDiv);
+
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function pushSystemMessage(text) {
+        renderChatMessage({ type: 'system', playerID: 'system', playerName: 'Hệ thống', text, timestamp: Date.now() });
+    }
+
+    function toggleChatPanel() {
+        const panel = document.getElementById('chat-panel');
+        panel.classList.toggle('open');
+        if (panel.classList.contains('open')) clearChatBadge();
+    }
+    let unreadChat = 0;
+    function bumpChatBadge() {
+        unreadChat++;
+        const badge = document.getElementById('chat-badge');
+        badge.textContent = unreadChat;
+        badge.style.display = 'flex';
+    }
+    function clearChatBadge() {
+        unreadChat = 0;
+        document.getElementById('chat-badge').style.display = 'none';
+    }
+
+    // ============================================================
+    // BOOTSTRAP
+    // ============================================================
+    buildEmojiPicker();
+    if (mode === 'solo') {
+        initSolo();
+    } else if (isOnline) {
+        initOnline();
+    } else {
+        // Không có tham số hợp lệ -> về sảnh
+        window.location.href = '/';
+    }
+</script>
+</body>
+</html>

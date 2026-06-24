@@ -10,9 +10,75 @@ app.use(express.static('public'));
 
 app.get('/uno', (req, res) => res.sendFile(path.join(__dirname, 'public', 'uno', 'index.html')));
 app.get('/chess', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chess', 'index.html')));
+app.get('/minesweeper', (req, res) => res.sendFile(path.join(__dirname, 'public', 'minesweeper', 'index.html')));
 
 // CHỈ CÒN LƯU DATA CỜ VUA
 const chessRooms = {}; 
+
+// ==========================================
+// LOGIC DÒ MÌN (MINESWEEPER) — Race to clear, bàn mìn chung
+// ==========================================
+const minesRooms = {}; // { roomId: { diff, rows, cols, mines: Set("r-c"), players: { socketId: {name, avatar, status} }, finished } }
+
+const MINES_DIFF = {
+    easy:   { rows: 9,  cols: 9,  mines: 10 },
+    medium: { rows: 16, cols: 16, mines: 40 },
+    hard:   { rows: 16, cols: 30, mines: 99 }
+};
+
+function generateMineSet(rows, cols, mineCount) {
+    const total = rows * cols;
+    const positions = new Set();
+    while (positions.size < Math.min(mineCount, total)) {
+        positions.add(Math.floor(Math.random() * total));
+    }
+    // Lưu dạng "r-c" cho dễ tra cứu
+    const mineSet = new Set();
+    positions.forEach(idx => {
+        const r = Math.floor(idx / cols);
+        const c = idx % cols;
+        mineSet.add(`${r}-${c}`);
+    });
+    return mineSet;
+}
+
+function countAdjacentMines(r, c, rows, cols, mineSet) {
+    let count = 0;
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && mineSet.has(`${nr}-${nc}`)) count++;
+        }
+    }
+    return count;
+}
+
+// Mở rộng tự động (flood-fill) các ô số 0, trả về danh sách { r, c, value } đã mở
+function floodReveal(startR, startC, rows, cols, mineSet) {
+    const opened = [];
+    const visited = new Set();
+    const stack = [[startR, startC]];
+    while (stack.length) {
+        const [r, c] = stack.pop();
+        const key = `${r}-${c}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+        if (mineSet.has(key)) continue;
+        const value = countAdjacentMines(r, c, rows, cols, mineSet);
+        opened.push({ r, c, value });
+        if (value === 0) {
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    stack.push([r + dr, c + dc]);
+                }
+            }
+        }
+    }
+    return opened;
+}
 
 // ==========================================
 // CHAT SYSTEM (per room)
@@ -182,6 +248,171 @@ io.on('connection', (socket) => {
             delete chessRooms[socket.roomId].players[socket.id];
             socket.to(socket.roomId).emit('opponent-resigned', "Đối thủ");
             if (Object.keys(chessRooms[socket.roomId].players).length === 0) delete chessRooms[socket.roomId];
+        }
+    });
+
+    // ==========================================
+    // LOGIC DÒ MÌN (MINESWEEPER)
+    // ==========================================
+    socket.on('mines:join-room', (data) => {
+        const { roomId, name, avatar, diff } = data;
+        socket.join(`mines:${roomId}`);
+        socket.minesRoomId = roomId;
+
+        if (!minesRooms[roomId]) {
+            const chosenDiff = MINES_DIFF[diff] ? diff : 'easy';
+            const { rows, cols, mines } = MINES_DIFF[chosenDiff];
+            minesRooms[roomId] = {
+                diff: chosenDiff,
+                rows, cols,
+                mineCount: mines,
+                mineSet: generateMineSet(rows, cols, mines),
+                players: {},
+                finished: false
+            };
+        }
+
+        const room = minesRooms[roomId];
+        const pIds = Object.keys(room.players);
+
+        if (!room.players[socket.id] && pIds.length >= 2) {
+            socket.emit('mines:room-full');
+            return;
+        }
+
+        room.players[socket.id] = room.players[socket.id] || {
+            name, avatar, opened: 0, status: 'playing' // playing | won | lost
+        };
+
+        const updatedIds = Object.keys(room.players);
+
+        // Nếu phòng đã kết thúc trước khi đủ 2 người (VD: người tạo phòng tự dò một mình
+        // trước khi đối thủ vào) thì sinh bàn mìn mới ngay khi đủ 2 người, tránh phòng "chết".
+        if (room.finished && updatedIds.length === 2) {
+            room.mineSet = generateMineSet(room.rows, room.cols, room.mineCount);
+            room.finished = false;
+            Object.values(room.players).forEach(p => { p.status = 'playing'; p.openedSet = new Set(); });
+        }
+
+        // Gửi cấu hình bàn cờ (không tiết lộ vị trí mìn) cho người vừa join
+        socket.emit('mines:init', {
+            rows: room.rows,
+            cols: room.cols,
+            mineCount: room.mineCount,
+            diff: room.diff,
+            players: room.players,
+            youId: socket.id
+        });
+
+        io.to(`mines:${roomId}`).emit('mines:players-update', room.players);
+
+        if (updatedIds.length === 2) {
+            io.to(`mines:${roomId}`).emit('mines:start');
+        } else {
+            socket.emit('mines:waiting');
+        }
+    });
+
+    socket.on('mines:reveal', (data) => {
+        const { roomId, r, c } = data;
+        const room = minesRooms[roomId];
+        if (!room || room.finished) return;
+        const player = room.players[socket.id];
+        if (!player || player.status !== 'playing') return;
+
+        const key = `${r}-${c}`;
+
+        if (room.mineSet.has(key)) {
+            // Đụng bom -> thua ngay
+            player.status = 'lost';
+            room.finished = true;
+            io.to(`mines:${roomId}`).emit('mines:player-hit-mine', {
+                playerId: socket.id,
+                r, c,
+                mines: Array.from(room.mineSet).map(k => {
+                    const [mr, mc] = k.split('-').map(Number);
+                    return { r: mr, c: mc };
+                })
+            });
+
+            socket.emit('mines:game-result', { result: 'lose', reason: 'hit-mine' });
+
+            const otherIds = Object.keys(room.players).filter(id => id !== socket.id);
+            if (otherIds.length > 0 && room.players[otherIds[0]].status === 'playing') {
+                room.players[otherIds[0]].status = 'won';
+                io.to(otherIds[0]).emit('mines:game-result', { result: 'win', reason: 'opponent-hit-mine' });
+            }
+            return;
+        }
+
+        const opened = floodReveal(r, c, room.rows, room.cols, room.mineSet);
+        player.opened = (player.openedSet = player.openedSet || new Set());
+        opened.forEach(cell => player.openedSet.add(`${cell.r}-${cell.c}`));
+
+        const totalSafeCells = room.rows * room.cols - room.mineSet.size;
+
+        socket.emit('mines:reveal-result', { opened });
+        socket.to(`mines:${roomId}`).emit('mines:opponent-progress', {
+            playerId: socket.id,
+            openedCount: player.openedSet.size,
+            totalSafeCells
+        });
+
+        if (player.openedSet.size >= totalSafeCells && !room.finished) {
+            player.status = 'won';
+            room.finished = true;
+            const otherIds = Object.keys(room.players).filter(id => id !== socket.id);
+            socket.emit('mines:game-result', { result: 'win', reason: 'cleared-board' });
+            if (otherIds.length > 0) {
+                room.players[otherIds[0]].status = 'lost';
+                io.to(otherIds[0]).emit('mines:game-result', { result: 'lose', reason: 'opponent-cleared-board' });
+            }
+        }
+    });
+
+    socket.on('mines:flag', (data) => {
+        const { roomId, r, c, flagged } = data;
+        socket.to(`mines:${roomId}`).emit('mines:opponent-flag', { playerId: socket.id, r, c, flagged });
+    });
+
+    socket.on('mines:rematch', (data) => {
+        const { roomId, diff } = data;
+        const room = minesRooms[roomId];
+        if (!room) return;
+        const chosenDiff = MINES_DIFF[diff] ? diff : room.diff;
+        const { rows, cols, mines } = MINES_DIFF[chosenDiff];
+        room.diff = chosenDiff;
+        room.rows = rows; room.cols = cols; room.mineCount = mines;
+        room.mineSet = generateMineSet(rows, cols, mines);
+        room.finished = false;
+        Object.values(room.players).forEach(p => { p.status = 'playing'; p.openedSet = new Set(); });
+        io.to(`mines:${roomId}`).emit('mines:rematch-start', {
+            rows: room.rows, cols: room.cols, mineCount: room.mineCount, diff: room.diff, players: room.players
+        });
+    });
+
+    socket.on('mines:resign', (data) => {
+        const { roomId } = data;
+        const room = minesRooms[roomId];
+        if (!room || room.finished) return;
+        const player = room.players[socket.id];
+        if (!player) return;
+        player.status = 'lost';
+        const otherIds = Object.keys(room.players).filter(id => id !== socket.id);
+        if (otherIds.length > 0) {
+            room.players[otherIds[0]].status = 'won';
+            room.finished = true;
+            io.to(otherIds[0]).emit('mines:game-result', { result: 'win', reason: 'opponent-resigned' });
+        }
+        socket.emit('mines:game-result', { result: 'lose', reason: 'resigned' });
+    });
+
+    socket.on('disconnect', () => {
+        if (socket.minesRoomId && minesRooms[socket.minesRoomId]) {
+            const room = minesRooms[socket.minesRoomId];
+            delete room.players[socket.id];
+            socket.to(`mines:${socket.minesRoomId}`).emit('mines:opponent-left');
+            if (Object.keys(room.players).length === 0) delete minesRooms[socket.minesRoomId];
         }
     });
 });

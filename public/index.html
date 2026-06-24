@@ -263,6 +263,7 @@
         }
         .game-icon-area.chess { background: radial-gradient(circle at 30% 20%, rgba(94,234,212,0.25), transparent 60%), var(--bg-elevated); }
         .game-icon-area.uno { background: radial-gradient(circle at 30% 20%, rgba(251,146,60,0.25), transparent 60%), var(--bg-elevated); }
+        .game-icon-area.mines { background: radial-gradient(circle at 30% 20%, rgba(248,113,113,0.25), transparent 60%), var(--bg-elevated); }
 
         .game-info { padding: 20px 20px 4px; flex: 1; }
         .game-info h3 { font-size: 18.5px; font-weight: 800; margin-bottom: 9px; letter-spacing: -0.2px; }
@@ -297,6 +298,26 @@
         .options-view p.lede { color: var(--text-muted); margin-bottom: 26px; font-size: 14px; }
         .options-grid { display: flex; flex-direction: column; gap: 12px; }
         .options-grid .btn-ghost { margin-top: 4px; }
+
+        /* Difficulty picker (Minesweeper) */
+        .diff-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-bottom: 22px; }
+        .diff-card {
+            background: var(--bg-elevated); border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm); padding: 12px 8px;
+            cursor: pointer; text-align: center; transition: 0.15s ease;
+        }
+        .diff-card:hover { border-color: var(--text-faint); }
+        .diff-card.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .diff-card .diff-name { font-size: 13px; font-weight: 800; margin-bottom: 3px; }
+        .diff-card .diff-meta { font-size: 10.5px; color: var(--text-faint); font-weight: 600; }
+
+        .room-code-input {
+            display: flex; gap: 8px; margin-top: 4px;
+        }
+        .room-code-input input[type="text"] { flex: 1; text-transform: uppercase; letter-spacing: 1px; text-align: center; font-weight: 700; }
+        .divider-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+        .divider-row .line { flex: 1; height: 1px; background: var(--border); }
+        .divider-row span { font-size: 11px; color: var(--text-faint); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 
         @media (max-width: 600px) {
             .container { padding: 28px 16px 56px; }
@@ -425,6 +446,22 @@
                     </div>
                 </div>
 
+                <div class="game-card">
+                    <div class="game-icon-area mines">💣</div>
+                    <div class="game-info">
+                        <h3>Dò Mìn Đối Kháng</h3>
+                        <div class="tags">
+                            <span class="tag">1 Người</span>
+                            <span class="tag">1v1 Race</span>
+                            <span class="tag">Tốc độ</span>
+                        </div>
+                        <p>Luyện phản xạ một mình hoặc cùng dò một bãi mìn với đối thủ — ai đụng bom trước thua, ai dò sạch trước thắng.</p>
+                    </div>
+                    <div class="game-action">
+                        <button class="btn-main" style="width: 100%;" onclick="showMinesOptions()">Vào Bãi Mìn</button>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -448,6 +485,46 @@
             <div class="options-grid">
                 <button class="btn-main" onclick="createUnoRoom()">👥 Tạo phòng Online</button>
                 <button class="btn-main btn-ghost" onclick="backToGamesFromUno()">🔙 Quay lại Sảnh</button>
+            </div>
+        </div>
+
+        <div class="options-view" id="step-mines-options">
+            <div class="opt-icon">💣</div>
+            <h2>Thiết lập Bãi Mìn</h2>
+            <p class="lede">Chọn độ khó rồi chơi luyện tập hoặc rủ đối thủ vào chung phòng</p>
+
+            <span class="field-label">Độ khó bàn cờ</span>
+            <div class="diff-grid" id="mines-diff-grid">
+                <div class="diff-card selected" data-diff="easy" onclick="selectMinesDiff('easy')">
+                    <div class="diff-name">Dễ</div>
+                    <div class="diff-meta">9×9 · 10 bom</div>
+                </div>
+                <div class="diff-card" data-diff="medium" onclick="selectMinesDiff('medium')">
+                    <div class="diff-name">Trung bình</div>
+                    <div class="diff-meta">16×16 · 40 bom</div>
+                </div>
+                <div class="diff-card" data-diff="hard" onclick="selectMinesDiff('hard')">
+                    <div class="diff-name">Khó</div>
+                    <div class="diff-meta">16×30 · 99 bom</div>
+                </div>
+            </div>
+
+            <div class="options-grid">
+                <button class="btn-main btn-outline" onclick="playMinesSolo()">🧍 Chơi Một Mình (Luyện tập)</button>
+                <button class="btn-main" onclick="createMinesRoom()">👥 Tạo Phòng Đối Kháng</button>
+            </div>
+
+            <div class="divider-row">
+                <div class="line"></div><span>Hoặc</span><div class="line"></div>
+            </div>
+
+            <div class="room-code-input">
+                <input type="text" id="mines-join-code" placeholder="Nhập mã phòng..." maxlength="8" onkeypress="if(event.key === 'Enter') joinMinesRoom()">
+                <button class="btn-main btn-outline" style="white-space: nowrap;" onclick="joinMinesRoom()">Vào phòng</button>
+            </div>
+
+            <div class="options-grid" style="margin-top: 18px;">
+                <button class="btn-main btn-ghost" onclick="backToGamesFromMines()">🔙 Quay lại Sảnh</button>
             </div>
         </div>
 
@@ -539,6 +616,35 @@
         function createUnoRoom() {
             const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
             window.location.href = `/uno?room=${roomId}`;
+        }
+
+        // ĐIỀU HƯỚNG DÒ MÌN (MINESWEEPER)
+        let minesDiff = 'easy';
+        function selectMinesDiff(diff) {
+            minesDiff = diff;
+            document.querySelectorAll('#mines-diff-grid .diff-card').forEach(el => {
+                el.classList.toggle('selected', el.dataset.diff === diff);
+            });
+        }
+        function showMinesOptions() {
+            document.getElementById('step-games').style.display = 'none';
+            document.getElementById('step-mines-options').style.display = 'block';
+        }
+        function backToGamesFromMines() {
+            document.getElementById('step-mines-options').style.display = 'none';
+            document.getElementById('step-games').style.display = 'block';
+        }
+        function playMinesSolo() {
+            window.location.href = `/minesweeper?mode=solo&diff=${minesDiff}`;
+        }
+        function createMinesRoom() {
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            window.location.href = `/minesweeper?room=${roomId}&diff=${minesDiff}&host=1`;
+        }
+        function joinMinesRoom() {
+            const code = document.getElementById('mines-join-code').value.trim().toUpperCase();
+            if (!code) return alert("Nhập mã phòng đối thủ gửi cho bạn đã nha!");
+            window.location.href = `/minesweeper?room=${code}`;
         }
     </script>
 </body>
