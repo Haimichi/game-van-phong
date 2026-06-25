@@ -1,0 +1,657 @@
+<!-- <!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Jenga 3D | Office Desk Edition</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #f1f5f9; 
+            user-select: none;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #ui-container { 
+            position: absolute; 
+            top: 25px; 
+            left: 25px; 
+            z-index: 10; 
+            pointer-events: none; 
+        }
+        
+        .card { 
+            background: rgba(255, 255, 255, 0.95); 
+            padding: 20px 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
+            color: #334155;
+            border: 1px solid #e2e8f0;
+            pointer-events: auto;
+        }
+        
+        h3 { margin: 0 0 12px 0; color: #ea580c; font-weight: 800; font-size: 18px; letter-spacing: 0.5px; text-transform: uppercase;}
+        p { margin: 8px 0; font-size: 13.5px; font-weight: 500;}
+        
+        .btn-reset {
+            margin-top: 18px; 
+            width: 100%; 
+            padding: 12px; 
+            background: #ea580c; 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            font-weight: 700; 
+            cursor: pointer; 
+            transition: 0.2s ease;
+            box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3);
+        }
+        .btn-reset:hover { background: #c2410c; transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-container">
+        <div class="card">
+            <h3>JENGA VĂN PHÒNG</h3>
+            <p>🖱️ <b>Chuột TRÁI:</b> Nhấn giữ & Kéo để rút gỗ</p>
+            <p>🔄 <b>Chuột PHẢI:</b> Giữ & Kéo để Xoay ngắm</p>
+            <button class="btn-reset" onclick="window.resetTower()">🔄 Xếp Lại Tháp</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import * as CANNON from 'cannon-es';
+
+        let scene, camera, renderer, controls, world;
+        let blocks = [];
+        const blockW = 1.2, blockH = 0.8, blockL = 3.6;
+        const layers = 15;
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let mouseBody, mouseConstraint, selectedBlock = null;
+        const plane = new THREE.Plane();
+        const intersection = new THREE.Vector3();
+
+        init();
+        animate();
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf1f5f9); 
+            scene.fog = new THREE.Fog(0xf1f5f9, 20, 60);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+            camera.position.set(12, 14, 16);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+            scene.add(ambient);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            dirLight.position.set(10, 25, 15);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.left = -15;
+            dirLight.shadow.camera.right = 15;
+            dirLight.shadow.camera.top = 15;
+            dirLight.shadow.camera.bottom = -15;
+            scene.add(dirLight);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 6, 0);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            
+            controls.mouseButtons = {
+                LEFT: null,
+                MIDDLE: THREE.MOUSE.ZOOM,
+                RIGHT: THREE.MOUSE.ROTATE
+            };
+            
+            controls.maxPolarAngle = Math.PI / 2 - 0.05; 
+            controls.minDistance = 8;
+            controls.maxDistance = 35;
+
+            // BÍ QUYẾT 1 & 4: Khởi tạo Vật lý và Tối ưu Solver
+            world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0);
+            world.allowSleep = true;
+            world.solver.iterations = 100; // Tăng vòng lặp tính toán để tháp đứng siêu vững
+            world.solver.tolerance = 0.001;
+
+            const woodPhysMat = new CANNON.Material('wood');
+            world.addContactMaterial(new CANNON.ContactMaterial(woodPhysMat, woodPhysMat, {
+                friction: 0.02,      // Rất trơn để dễ rút ở giữa tháp
+                restitution: 0.0,    // Hấp thụ lực 100%, không nảy
+                contactEquationStiffness: 1e8, // Ép gỗ cứng không bị lún
+                contactEquationRelaxation: 3
+            }));
+
+            // BÀN CHƠI
+            const tableW = 30, tableH = 2, tableL = 30;
+            const tableGeo = new THREE.BoxGeometry(tableW, tableH, tableL);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+            const tableMesh = new THREE.Mesh(tableGeo, tableMat);
+            tableMesh.position.y = -tableH / 2; 
+            tableMesh.receiveShadow = true;
+            scene.add(tableMesh);
+
+            const tableShape = new CANNON.Box(new CANNON.Vec3(tableW/2, tableH/2, tableL/2));
+            const tableBody = new CANNON.Body({ mass: 0, material: woodPhysMat });
+            tableBody.addShape(tableShape);
+            tableBody.position.set(0, -tableH / 2, 0);
+            world.addBody(tableBody);
+
+            mouseBody = new CANNON.Body({ mass: 0 });
+            mouseBody.collisionFilterGroup = 0;
+            mouseBody.collisionFilterMask = 0;
+            world.addBody(mouseBody);
+
+            buildTower(woodPhysMat);
+
+            window.addEventListener('pointerdown', onPointerDown);
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function buildTower(physMat) {
+            const shape = new CANNON.Box(new CANNON.Vec3(blockW/2, blockH/2, blockL/2));
+            const geo = new THREE.BoxGeometry(blockW - 0.02, blockH - 0.02, blockL - 0.02);
+
+            for(let layer = 0; layer < layers; layer++) {
+                const isEven = layer % 2 === 0;
+                
+                // BÍ QUYẾT 5: Thêm khoảng hở vi mô (0.01) để các khối gỗ rơi nhẹ xuống xếp tự nhiên
+                const y = layer * (blockH + 0.01) + blockH / 2; 
+                
+                for(let i = -1; i <= 1; i++) {
+                    const offset = i * (blockW + 0.02); // Khoảng hở bề ngang
+                    const x = isEven ? offset : 0;
+                    const z = isEven ? 0 : offset;
+                    const rot = isEven ? 0 : Math.PI / 2;
+
+                    const mat = new THREE.MeshStandardMaterial({ 
+                        color: 0xd97706,
+                        roughness: 0.6 
+                    });
+                    
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    scene.add(mesh);
+
+                    // BÍ QUYẾT 3: Tăng trọng lượng và cản lực (Damping)
+                    const body = new CANNON.Body({
+                        mass: 2, 
+                        material: physMat,
+                        linearDamping: 0.4,   // Cản lực giúp rút đầm tay
+                        angularDamping: 0.4   // Chống xoay quá trớn
+                    });
+                    body.addShape(shape);
+                    body.position.set(x, y, z);
+                    body.quaternion.setFromAxisAngle(new CANNON.Vec3(0,1,0), rot);
+                    world.addBody(body);
+
+                    blocks.push({ mesh, body, originColor: 0xd97706 });
+                }
+            }
+        }
+
+        function onPointerDown(e) {
+            if (e.button !== 0) return; 
+            
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            const meshes = blocks.map(b => b.mesh);
+            const hits = raycaster.intersectObjects(meshes);
+
+            if (hits.length > 0) {
+                const hit = hits[0];
+                selectedBlock = blocks.find(b => b.mesh === hit.object);
+                
+                if (selectedBlock) {
+                    selectedBlock.body.wakeUp();
+                    selectedBlock.mesh.material.color.setHex(0xfde047); 
+
+                    mouseBody.position.copy(hit.point);
+                    
+                    const localPivot = new CANNON.Vec3();
+                    selectedBlock.body.pointToLocalFrame(new CANNON.Vec3(hit.point.x, hit.point.y, hit.point.z), localPivot);
+                    
+                    // BÍ QUYẾT 2: Giới hạn Lực Rút tối đa là 150 để mô phỏng sự êm ái của tay người
+                    mouseConstraint = new CANNON.PointToPointConstraint(selectedBlock.body, localPivot, mouseBody, new CANNON.Vec3(0,0,0), 150);
+                    world.addConstraint(mouseConstraint);
+
+                    const normal = new THREE.Vector3().copy(camera.position).sub(hit.point).normalize();
+                    plane.setFromNormalAndCoplanarPoint(normal, hit.point);
+                }
+            }
+        }
+
+        function onPointerMove(e) {
+            if (!selectedBlock || !mouseConstraint) return;
+
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            if (raycaster.ray.intersectPlane(plane, intersection)) {
+                mouseBody.position.copy(intersection);
+                selectedBlock.body.wakeUp(); 
+            }
+        }
+
+        function onPointerUp(e) {
+            if (e.button !== 0) return;
+            
+            if (mouseConstraint) {
+                world.removeConstraint(mouseConstraint);
+                mouseConstraint = null;
+            }
+
+            if (selectedBlock) {
+                selectedBlock.mesh.material.color.setHex(selectedBlock.originColor);
+                selectedBlock = null;
+            }
+        }
+
+        window.resetTower = function() {
+            blocks.forEach(b => {
+                scene.remove(b.mesh);
+                world.removeBody(b.body);
+            });
+            blocks = [];
+            buildTower(world.contactmaterials[0].materials[0]);
+            controls.target.set(0, 6, 0);
+        };
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            world.step(1/60);
+            
+            blocks.forEach(b => {
+                b.mesh.position.copy(b.body.position);
+                b.mesh.quaternion.copy(b.body.quaternion);
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html> -->
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Jenga 3D | Office Desk Edition</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #f1f5f9; 
+            user-select: none;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #ui-container { 
+            position: absolute; 
+            top: 25px; 
+            left: 25px; 
+            z-index: 10; 
+            pointer-events: none; 
+        }
+        
+        .card { 
+            background: rgba(255, 255, 255, 0.95); 
+            padding: 20px 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
+            color: #334155;
+            border: 1px solid #e2e8f0;
+            pointer-events: auto;
+        }
+        
+        h3 { margin: 0 0 12px 0; color: #ea580c; font-weight: 800; font-size: 18px; letter-spacing: 0.5px; text-transform: uppercase;}
+        p { margin: 8px 0; font-size: 13.5px; font-weight: 500;}
+        
+        .btn-reset {
+            margin-top: 18px; 
+            width: 100%; 
+            padding: 12px; 
+            background: #ea580c; 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            font-weight: 700; 
+            cursor: pointer; 
+            transition: 0.2s ease;
+            box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3);
+        }
+        .btn-reset:hover { background: #c2410c; transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-container">
+        <div class="card">
+            <h3>JENGA VĂN PHÒNG</h3>
+            <p>🖱️ <b>Chuột TRÁI:</b> Nhấn giữ & Kéo để rút gỗ</p>
+            <p>🔄 <b>Chuột PHẢI:</b> Giữ & Kéo để Xoay ngắm</p>
+            <button class="btn-reset" onclick="window.resetTower()">🔄 Xếp Lại Tháp</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import * as CANNON from 'cannon-es';
+
+        let scene, camera, renderer, controls, world;
+        let blocks = [];
+        const blockW = 1.2, blockH = 0.8, blockL = 3.6;
+        const layers = 15;
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let mouseBody, mouseConstraint, selectedBlock = null;
+        const plane = new THREE.Plane();
+        const intersection = new THREE.Vector3();
+        
+        // BIẾN LƯU CHIỀU CAO: Dùng để khóa trục Y, chặn nhấc tháp
+        let dragHeightY = 0;
+
+        init();
+        animate();
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf1f5f9); 
+            scene.fog = new THREE.Fog(0xf1f5f9, 20, 60);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+            camera.position.set(12, 14, 16);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+            scene.add(ambient);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            dirLight.position.set(10, 25, 15);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.left = -15;
+            dirLight.shadow.camera.right = 15;
+            dirLight.shadow.camera.top = 15;
+            dirLight.shadow.camera.bottom = -15;
+            scene.add(dirLight);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 6, 0);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            
+            controls.mouseButtons = {
+                LEFT: null,
+                MIDDLE: THREE.MOUSE.ZOOM,
+                RIGHT: THREE.MOUSE.ROTATE
+            };
+            
+            controls.maxPolarAngle = Math.PI / 2 - 0.05; 
+            controls.minDistance = 8;
+            controls.maxDistance = 35;
+
+            world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0);
+            world.allowSleep = true;
+            world.solver.iterations = 100; 
+            world.solver.tolerance = 0.001;
+
+            const woodPhysMat = new CANNON.Material('wood');
+            world.addContactMaterial(new CANNON.ContactMaterial(woodPhysMat, woodPhysMat, {
+                // TĂNG NHẸ MA SÁT: 0.15 là tỷ lệ vàng. Đủ trơn để rút êm như bản cũ, đủ rít để tháp không tự trượt
+                friction: 0.15,      
+                restitution: 0.0,    
+                contactEquationStiffness: 1e8, 
+                contactEquationRelaxation: 3
+            }));
+
+            // BÀN CHƠI
+            const tableW = 30, tableH = 2, tableL = 30;
+            const tableGeo = new THREE.BoxGeometry(tableW, tableH, tableL);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+            const tableMesh = new THREE.Mesh(tableGeo, tableMat);
+            tableMesh.position.y = -tableH / 2; 
+            tableMesh.receiveShadow = true;
+            scene.add(tableMesh);
+
+            const tableShape = new CANNON.Box(new CANNON.Vec3(tableW/2, tableH/2, tableL/2));
+            const tableBody = new CANNON.Body({ mass: 0, material: woodPhysMat });
+            tableBody.addShape(tableShape);
+            tableBody.position.set(0, -tableH / 2, 0);
+            world.addBody(tableBody);
+
+            mouseBody = new CANNON.Body({ mass: 0 });
+            mouseBody.collisionFilterGroup = 0;
+            mouseBody.collisionFilterMask = 0;
+            world.addBody(mouseBody);
+
+            buildTower(woodPhysMat);
+
+            window.addEventListener('pointerdown', onPointerDown);
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function buildTower(physMat) {
+            // Thu nhỏ Box vật lý hơn Box đồ họa 5% (Gap 5%) để triệt tiêu ma sát cạnh
+            const shape = new CANNON.Box(new CANNON.Vec3(blockW/2 * 0.95, blockH/2 * 0.95, blockL/2 * 0.95));
+            const geo = new THREE.BoxGeometry(blockW - 0.04, blockH - 0.04, blockL - 0.04);
+
+            for(let layer = 0; layer < layers; layer++) {
+                const isEven = layer % 2 === 0;
+                
+                const y = layer * (blockH + 0.01) + blockH / 2; 
+                
+                for(let i = -1; i <= 1; i++) {
+                    const offset = i * (blockW + 0.02); 
+                    const x = isEven ? offset : 0;
+                    const z = isEven ? 0 : offset;
+                    const rot = isEven ? 0 : Math.PI / 2;
+
+                    const mat = new THREE.MeshStandardMaterial({ 
+                        color: 0xd97706,
+                        roughness: 0.6 
+                    });
+                    
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    scene.add(mesh);
+
+                    const body = new CANNON.Body({
+                    mass: 5, // Tăng khối lượng để tháp đầm, khó đổ hơn
+                    material: physMat,
+                    linearDamping: 0.1,
+                    angularDamping: 0.3 // Tăng cản xoay để thanh gỗ không bị "xoay tít" khi rút
+                    });
+                    body.addShape(shape);
+                    body.position.set(x, y, z);
+                    body.quaternion.setFromAxisAngle(new CANNON.Vec3(0,1,0), rot);
+                    world.addBody(body);
+
+                    blocks.push({ mesh, body, originColor: 0xd97706 });
+                }
+            }
+        }
+
+        function onPointerDown(e) {
+            if (e.button !== 0) return; 
+            
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            const meshes = blocks.map(b => b.mesh);
+            const hits = raycaster.intersectObjects(meshes);
+
+            if (hits.length > 0) {
+                const hit = hits[0];
+                selectedBlock = blocks.find(b => b.mesh === hit.object);
+                
+                if (selectedBlock) {
+                    selectedBlock.body.wakeUp();
+                    selectedBlock.mesh.material.color.setHex(0xfde047); 
+
+                    mouseBody.position.copy(hit.point);
+                    
+                    // LƯU LẠI ĐỘ CAO TRỤC Y: Để lát nữa khóa cứng hướng kéo
+                    dragHeightY = hit.point.y;
+                    
+                    const localPivot = new CANNON.Vec3();
+                    selectedBlock.body.pointToLocalFrame(new CANNON.Vec3(hit.point.x, hit.point.y, hit.point.z), localPivot);
+                    
+                    // HẠ LỰC TAY: Chỉ ở mức 80. Nếu gỗ bị đè quá nặng, tay người chơi sẽ tự trượt ra thay vì kéo sập
+                    mouseConstraint = new CANNON.PointToPointConstraint(selectedBlock.body, localPivot, mouseBody, new CANNON.Vec3(0,0,0), 80);
+                    world.addConstraint(mouseConstraint);
+
+                    const normal = new THREE.Vector3().copy(camera.position).sub(hit.point).normalize();
+                    plane.setFromNormalAndCoplanarPoint(normal, hit.point);
+                }
+            }
+        }
+
+        function onPointerMove(e) {
+            if (!selectedBlock || !mouseConstraint) return;
+
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            if (raycaster.ray.intersectPlane(plane, intersection)) {
+                // KHÓA CỨNG TRỤC Y: Chống nhấc tháp. Bạn chỉ có thể kéo theo chiều ngang mặt bàn!
+                intersection.y = dragHeightY;
+                
+                mouseBody.position.copy(intersection);
+                selectedBlock.body.wakeUp(); 
+            }
+        }
+
+        function onPointerUp(e) {
+            if (e.button !== 0) return;
+            
+            if (mouseConstraint) {
+                world.removeConstraint(mouseConstraint);
+                mouseConstraint = null;
+            }
+
+            if (selectedBlock) {
+                selectedBlock.mesh.material.color.setHex(selectedBlock.originColor);
+                selectedBlock = null;
+            }
+        }
+
+        window.resetTower = function() {
+            blocks.forEach(b => {
+                scene.remove(b.mesh);
+                world.removeBody(b.body);
+            });
+            blocks = [];
+            buildTower(world.contactmaterials[0].materials[0]);
+            controls.target.set(0, 6, 0);
+        };
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            world.step(1/60);
+            
+            blocks.forEach(b => {
+                b.mesh.position.copy(b.body.position);
+                b.mesh.quaternion.copy(b.body.quaternion);
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

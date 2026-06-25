@@ -6,6 +6,8 @@
 <title>UNO Online — Office Game Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
 <style>
 :root {
     --red:    #E8433A;
@@ -600,7 +602,7 @@ document.getElementById('chat-room-label').innerText = `#${roomId}`;
 document.getElementById('players-select').value = String(numPlayers);
 
 // ── TÊN NGƯỜI CHƠI (lưu lại cho lần sau, không bắt nhập lại mỗi lần) ──
-const NAME_KEY = 'uno_player_name';
+const NAME_KEY = 'playerName';
 let myName = (localStorage.getItem(NAME_KEY) || '').trim();
 let nameConfirmed = !!myName;
 // playerID -> tên hiển thị thật, đồng bộ từ server qua socket chat (xem phần CHAT bên dưới)

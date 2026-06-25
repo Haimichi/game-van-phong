@@ -432,9 +432,9 @@
         hard:   { rows: 16, cols: 30, mines: 99 }
     };
 
-    const myName = sessionStorage.getItem('playerName') || 'Khách';
-    const myAvatar = sessionStorage.getItem('playerAvatar') || 'https://api.dicebear.com/7.x/bottts/svg?seed=Felix';
-    if (!sessionStorage.getItem('playerName')) {
+    const myName = localStorage.getItem('playerName') || 'Khách';
+    const myAvatar = localStorage.getItem('playerAvatar') || 'https://api.dicebear.com/7.x/bottts/svg?seed=Felix';
+    if (!localStorage.getItem('playerName')) {
         // Chưa đặt tên/avatar -> quay lại sảnh để thiết lập trước, tránh phá vỡ tính nhất quán UX
         window.location.href = '/';
     }

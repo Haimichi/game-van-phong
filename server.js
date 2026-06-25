@@ -11,6 +11,7 @@ app.use(express.static('public'));
 app.get('/uno', (req, res) => res.sendFile(path.join(__dirname, 'public', 'uno', 'index.html')));
 app.get('/chess', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chess', 'index.html')));
 app.get('/minesweeper', (req, res) => res.sendFile(path.join(__dirname, 'public', 'minesweeper', 'index.html')));
+app.get('/jenga', (req, res) => res.sendFile(path.join(__dirname, 'public', 'jenga', 'index.html')));
 
 // CHỈ CÒN LƯU DATA CỜ VUA
 const chessRooms = {}; 

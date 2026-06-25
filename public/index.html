@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GameHub | Cổng Game Giải Lao</title>
+    <title>GameHub</title>
     <style>
         /* ===== Design tokens ===== */
         :root {
@@ -264,6 +264,7 @@
         .game-icon-area.chess { background: radial-gradient(circle at 30% 20%, rgba(94,234,212,0.25), transparent 60%), var(--bg-elevated); }
         .game-icon-area.uno { background: radial-gradient(circle at 30% 20%, rgba(251,146,60,0.25), transparent 60%), var(--bg-elevated); }
         .game-icon-area.mines { background: radial-gradient(circle at 30% 20%, rgba(248,113,113,0.25), transparent 60%), var(--bg-elevated); }
+        .game-icon-area.jenga { background: radial-gradient(circle at 30% 20%, rgba(212, 212, 216, 0.2), transparent 60%), var(--bg-elevated); }
 
         .game-info { padding: 20px 20px 4px; flex: 1; }
         .game-info h3 { font-size: 18.5px; font-weight: 800; margin-bottom: 9px; letter-spacing: -0.2px; }
@@ -423,7 +424,7 @@
                             <span class="tag">Logic</span>
                             <span class="tag">PvP / PvE</span>
                         </div>
-                        <p>Đấu trí căng thẳng cùng đồng nghiệp hoặc luyện tập nâng cao kỹ năng với hệ thống Trí tuệ nhân tạo (Bot).</p>
+                        <p>Đấu trí căng thẳng cùng bạn bè hoặc luyện tập nâng cao kỹ năng với hệ thống Trí tuệ nhân tạo (Bot).</p>
                     </div>
                     <div class="game-action">
                         <button class="btn-main" style="width: 100%;" onclick="showChessOptions()">Vào Phòng Cờ</button>
@@ -433,13 +434,12 @@
                 <div class="game-card">
                     <div class="game-icon-area uno">🃏</div>
                     <div class="game-info">
-                        <h3>Bài UNO Quyết Chiến</h3>
+                        <h3>Bài UNO</h3>
                         <div class="tags">
                             <span class="tag">2 - 10 Người</span>
                             <span class="tag">Ẩn Bài</span>
-                            <span class="tag">boardgame.io</span>
                         </div>
-                        <p>Tựa game sát phạt, lươn lẹo hủy diệt tình cảm anh em văn phòng vận hành trên nền tảng an toàn bảo mật.</p>
+                        <p>Tựa game sát phạt, lươn lẹo hủy diệt tình cảm anh em</p>
                     </div>
                     <div class="game-action">
                         <button class="btn-main" style="width: 100%;" onclick="showUnoOptions()">Vào Phòng UNO</button>
@@ -461,6 +461,22 @@
                         <button class="btn-main" style="width: 100%;" onclick="showMinesOptions()">Vào Bãi Mìn</button>
                     </div>
                 </div>
+
+                <div class="game-card">
+                <div class="game-icon-area jenga">🪵</div>
+            <div class="game-info">
+                <h3>Rút Gỗ Jenga 3D</h3>
+                <div class="tags">
+                    <span class="tag">Giải Trí</span>
+                    <span class="tag">Vật Lý 3D</span>
+                    <span class="tag">Three.js</span>
+                </div>
+                <p>Thử thách sự khéo léo với tháp gỗ mô phỏng vật lý thời gian thực. Kéo thả rút các thanh gỗ chuẩn xác để không làm sập tháp!</p>
+            </div>
+            <div class="game-action">
+                <button class="btn-main" style="width: 100%;" onclick="window.location.href='/jenga'">Chơi Rút Gỗ</button>
+            </div>
+        </div>
 
             </div>
         </div>
@@ -554,8 +570,8 @@
         }
 
         window.onload = function() {
-            const savedName = sessionStorage.getItem('playerName');
-            const savedAvatar = sessionStorage.getItem('playerAvatar');
+            const savedName = localStorage.getItem('playerName');
+            const savedAvatar = localStorage.getItem('playerAvatar');
             if (savedName && savedAvatar) {
                 myName = savedName;
                 myAvatar = savedAvatar;
@@ -568,8 +584,8 @@
             if(!input) return alert("Nhập tên hiển thị đi bạn ơi!");
 
             myName = input;
-            sessionStorage.setItem('playerName', myName);
-            sessionStorage.setItem('playerAvatar', myAvatar);
+            localStorage.setItem('playerName', myName);
+            localStorage.setItem('playerAvatar', myAvatar);
 
             showGamesLobby();
         }
@@ -584,8 +600,8 @@
         }
 
         function logout() {
-            sessionStorage.removeItem('playerName');
-            sessionStorage.removeItem('playerAvatar');
+            localStorage.removeItem('playerName');
+            localStorage.removeItem('playerAvatar');
             window.location.reload();
         }
 
