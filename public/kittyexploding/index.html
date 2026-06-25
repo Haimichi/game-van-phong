@@ -1,0 +1,1936 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐱💥 Mèo Nổ</title>
+<style>
+/* ═══════════════════════════════════════
+   DESIGN: Neon Night — bảng tối, accent
+   cam-đỏ rực rỡ, font mono để game feel
+   ═══════════════════════════════════════ */
+:root {
+  --bg:        #0d0d14;
+  --surface:   #181825;
+  --surface2:  #1e1e2e;
+  --border:    #2a2a3d;
+  --text:      #cdd6f4;
+  --muted:     #6c7086;
+  --accent:    #f38ba8;      /* hồng-đỏ — màu bom */
+  --accent2:   #fab387;      /* cam — hành động */
+  --safe:      #a6e3a1;      /* xanh lá — an toàn */
+  --blue:      #89b4fa;
+  --yellow:    #f9e2af;
+  --purple:    #cba6f7;
+  --radius:    10px;
+  --card-w:    72px;
+  --card-h:    108px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Courier New', monospace;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Screens ── */
+.screen { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+.screen.active { display: flex; }
+
+/* ── Lobby ── */
+#screen-lobby {
+  gap: 24px;
+}
+.lobby-title {
+  font-size: 3rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  line-height: 1;
+}
+.lobby-title span { color: var(--accent); }
+.lobby-sub { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+
+.card-lobby {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.field-label { font-size: .75rem; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 4px; }
+input, select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: .95rem;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color .15s;
+}
+input:focus, select:focus { border-color: var(--accent); }
+select option { background: var(--surface); }
+
+.divider { height: 1px; background: var(--border); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 20px;
+  border: none; border-radius: 8px;
+  font-family: inherit; font-size: .95rem; font-weight: 700; cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #1e1e2e; }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-safe { background: var(--safe); color: #1e1e2e; }
+.btn-warn { background: var(--accent2); color: #1e1e2e; }
+.btn-sm { padding: 6px 12px; font-size: .82rem; }
+
+/* ── Lobby waiting ── */
+.lobby-players { display: flex; flex-direction: column; gap: 8px; }
+.lobby-player {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg); border-radius: 6px;
+  font-size: .88rem;
+}
+.lobby-player .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.lobby-player.ready .dot { background: var(--safe); }
+.lobby-player .tag { margin-left: auto; font-size: .72rem; color: var(--muted); }
+
+/* ── Game screen ── */
+#screen-game {
+  display: none;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+#screen-game.active { display: flex; }
+
+/* Top bar */
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-title { font-weight: 900; font-size: 1.1rem; color: var(--accent); flex: 1; }
+.deck-badge {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; font-size: .82rem; color: var(--yellow);
+}
+.turn-badge {
+  background: var(--accent); color: #1e1e2e;
+  border-radius: 6px; padding: 4px 10px; font-size: .82rem; font-weight: 700;
+}
+
+/* Main layout */
+.game-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* Opponents panel */
+.opponents-panel {
+  width: 190px;
+  min-width: 160px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.opponent-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  cursor: default;
+  transition: border-color .15s;
+}
+.opponent-card.current-turn { border-color: var(--accent2); }
+.opponent-card.eliminated { opacity: .4; }
+.opponent-name { font-size: .82rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opponent-count { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+.opponent-cards-row { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 6px; }
+.mini-card {
+  width: 12px; height: 18px;
+  border-radius: 2px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+/* Center area */
+.center-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 20px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Deck & Discard */
+.table-area {
+  display: flex;
+  gap: 36px;
+  align-items: center;
+}
+.pile-wrapper { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.pile-label { font-size: .72rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.card-face {
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  font-size: .7rem;
+  font-weight: 700;
+  cursor: default;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  padding: 5px 4px 0;
+}
+
+.card-deck {
+  background: linear-gradient(160deg, #1a1a2e, #16213e 70%);
+  border-color: var(--blue);
+  box-shadow: 0 0 12px rgba(137,180,250,.15);
+  cursor: pointer;
+}
+.card-deck:hover { transform: translateY(-4px); box-shadow: 0 0 20px rgba(137,180,250,.35); }
+.card-deck:active { transform: translateY(-1px); }
+
+.card-discard {
+  background: linear-gradient(160deg, #1e1e2e, #181825 70%);
+  border-color: var(--border);
+}
+
+/* Status overlay on deck */
+.deck-count {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: var(--blue);
+  color: #1e1e2e;
+  border-radius: 10px;
+  font-size: .62rem;
+  font-weight: 900;
+  padding: 1px 5px;
+}
+
+/* Action area */
+.action-area {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  min-height: 60px;
+  width: 100%;
+  max-width: 500px;
+  text-align: center;
+  font-size: .88rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.action-area.highlight { border-color: var(--accent2); color: var(--text); }
+.action-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* My hand */
+.my-hand-area {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.my-hand-label {
+  font-size: .72rem; color: var(--muted); letter-spacing: .06em;
+  text-transform: uppercase; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.my-hand-cards {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.my-hand-cards::-webkit-scrollbar { height: 4px; }
+.my-hand-cards::-webkit-scrollbar-track { background: transparent; }
+.my-hand-cards::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.hand-card {
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  font-size: .7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+  user-select: none;
+  padding: 5px 4px 0;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hand-card .card-emoji { font-size: 1.6rem; line-height: 1; }
+.hand-card .card-name { font-size: .6rem; color: rgba(255,255,255,.75); }
+
+.hand-card:hover:not(.disabled) { transform: translateY(-10px); box-shadow: 0 8px 20px rgba(0,0,0,.4); border-color: var(--accent2); }
+.hand-card.selected { border-color: var(--accent2); transform: translateY(-14px); box-shadow: 0 8px 20px rgba(250,179,135,.3); }
+.hand-card.disabled { opacity: .45; cursor: not-allowed; }
+
+/* ═══════════════════════════════════════
+   THIẾT KẾ LÁ BÀI MỚI
+   — pip góc trên/dưới, vùng art lớn ở giữa
+     (emoji to hoặc ảnh thật nếu có), banner
+     tên bài ở đáy, pattern nền theo màu bài.
+   Muốn dùng ẢNH THẬT: chỉ cần điền URL vào
+   biến CARD_IMAGES trong phần <script> —
+   card sẽ tự động hiển thị ảnh thay emoji.
+   ═══════════════════════════════════════ */
+.card-themed { --card-accent: #ffffff; position: relative; overflow: hidden; }
+.card-themed::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(circle at 16% 14%, var(--card-accent) 0%, transparent 40%),
+    radial-gradient(circle at 84% 86%, var(--card-accent) 0%, transparent 40%);
+  opacity: .16;
+  pointer-events: none;
+}
+.card-themed::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+  pointer-events: none;
+}
+
+.card-pip {
+  position: absolute;
+  z-index: 2;
+  font-size: .68rem;
+  line-height: 1;
+  opacity: .7;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.6));
+}
+.card-pip.tl { top: 4px; left: 5px; }
+.card-pip.br { bottom: 18px; right: 5px; transform: rotate(180deg); }
+
+.card-art {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: cover;
+  background-position: center;
+  border-radius: 6px;
+  margin: 1px 0;
+}
+.card-art .card-emoji {
+  font-size: 1.9rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 5px rgba(0,0,0,.45));
+}
+.card-art.has-image .card-emoji { display: none; }
+
+.card-label {
+  position: relative;
+  z-index: 1;
+  font-size: .56rem;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  padding: 3px 2px;
+  margin: 0 -4px;
+  width: calc(100% + 8px);
+  background: rgba(0,0,0,.28);
+  border-top: 1px solid rgba(255,255,255,.08);
+  color: rgba(255,255,255,.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Card types — màu nền + accent cho pattern.
+   (Nếu sau này có ảnh thật, các màu này vẫn
+   hiện ở viền/pattern phía sau ảnh) */
+.card-ExplodingKitten { background: linear-gradient(160deg,#3a1010,#1a0505 75%); border-color: var(--accent); --card-accent: var(--accent); }
+.card-Defuse          { background: linear-gradient(160deg,#103a18,#0a1f0d 75%); border-color: var(--safe);   --card-accent: var(--safe); }
+.card-Skip            { background: linear-gradient(160deg,#10173a,#070b1f 75%); border-color: var(--blue);   --card-accent: var(--blue); }
+.card-Attack          { background: linear-gradient(160deg,#3a2110,#1f0f04 75%); border-color: var(--accent2); --card-accent: var(--accent2); }
+.card-Favor           { background: linear-gradient(160deg,#33103a,#1a071f 75%); border-color: var(--purple); --card-accent: var(--purple); }
+.card-Shuffle         { background: linear-gradient(160deg,#0d3030,#06201f 75%); border-color: #94e2d5;       --card-accent: #94e2d5; }
+.card-SeeTheFuture    { background: linear-gradient(160deg,#33330d,#1f1f06 75%); border-color: var(--yellow); --card-accent: var(--yellow); }
+.card-Nope            { background: linear-gradient(160deg,#3a1010,#1a0808 75%); border-color: #eba0ac;      --card-accent: #eba0ac; }
+.card-Cat             { background: linear-gradient(160deg,#23103a,#10071f 75%); border-color: var(--purple); --card-accent: var(--purple); }
+.card-deck            { --card-accent: var(--blue); }
+.card-discard         { --card-accent: var(--muted); }
+
+/* Right panel — log */
+.log-panel {
+  width: 200px;
+  min-width: 170px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.log-title { font-size: .72rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px; }
+.log-entry {
+  font-size: .72rem;
+  color: var(--muted);
+  line-height: 1.4;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+.log-entry.highlight { color: var(--accent); border-color: var(--accent); }
+
+/* ── Overlays ── */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+.overlay.active { display: flex; }
+.overlay-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  max-width: 440px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  text-align: center;
+}
+.overlay-title { font-size: 1.6rem; font-weight: 900; }
+.overlay-sub { font-size: .88rem; color: var(--muted); }
+
+/* See Future cards */
+.future-cards { display: flex; gap: 10px; justify-content: center; }
+
+/* Bomb insert */
+.bomb-slider { width: 100%; }
+.bomb-pos-label { font-size: .82rem; color: var(--yellow); }
+
+/* Toast */
+#toast {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 20px; font-size: .88rem;
+  opacity: 0; transition: opacity .2s;
+  z-index: 200; pointer-events: none;
+}
+#toast.show { opacity: 1; }
+
+/* Nope button floating */
+#nope-btn {
+  position: fixed; bottom: 180px; right: 20px;
+  background: var(--accent);
+  color: #1e1e2e;
+  border: none;
+  border-radius: 50%;
+  width: 56px; height: 56px;
+  font-size: 1rem; font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(243,139,168,.4);
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 50;
+  transition: transform .15s;
+}
+#nope-btn:hover { transform: scale(1.1); }
+#nope-btn.visible { display: flex; animation: nopePulse 1s ease-in-out infinite; }
+@keyframes nopePulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(243,139,168,.4); }
+  50% { box-shadow: 0 4px 32px rgba(243,139,168,.9), 0 0 0 8px rgba(243,139,168,.15); }
+}
+
+/* ═══════════════════════════════════════
+   HIỆU ỨNG HÀNH ĐỘNG — banner nổi lên mỗi
+   khi có người đánh bài / xảy ra sự kiện
+   (skip, attack, defuse, nope, ăn trộm
+   bằng cặp lá, v.v.) để không bị "bốc bài
+   trong im lặng" nữa.
+   ═══════════════════════════════════════ */
+#action-banner-stack {
+  position: fixed;
+  top: 64px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 150;
+  pointer-events: none;
+  width: min(92vw, 420px);
+}
+.action-banner {
+  --banner-accent: var(--muted);
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--banner-accent);
+  border-radius: 10px;
+  padding: 10px 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.02);
+  font-size: .85rem;
+  font-weight: 700;
+  opacity: 0;
+  transform: translateY(-16px) scale(.96);
+  transition: opacity .25s ease, transform .25s ease;
+  width: 100%;
+}
+.action-banner.show { opacity: 1; transform: translateY(0) scale(1); }
+.action-banner.hide { opacity: 0; transform: translateY(-8px) scale(.97); }
+.action-banner-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 6px var(--banner-accent));
+}
+.action-banner-text { color: var(--text); line-height: 1.3; text-align: left; }
+
+/* Hiệu ứng nháy toàn màn hình khi nổ / thoát bom thành công */
+#fx-flash {
+  position: fixed; inset: 0;
+  z-index: 140;
+  pointer-events: none;
+  opacity: 0;
+}
+#fx-flash.flash-boom { background: radial-gradient(circle, rgba(243,139,168,.55), transparent 70%); animation: fxBoom .7s ease-out; }
+#fx-flash.flash-safe { background: radial-gradient(circle, rgba(166,227,161,.45), transparent 70%); animation: fxBoom .7s ease-out; }
+@keyframes fxBoom {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Rung màn hình nhẹ khi bị Attack */
+.shake-screen { animation: fxShake .4s ease; }
+@keyframes fxShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+/* ── Leave room button ── */
+.btn-leave {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(243,139,168,.4);
+}
+.btn-leave:hover { background: rgba(243,139,168,.12); }
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ── Chat: floating action button ── */
+#chat-fab {
+  position: fixed; bottom: 20px; left: 20px;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 1.3rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  z-index: 60;
+  transition: transform .15s;
+}
+#chat-fab:hover { transform: scale(1.08); }
+#chat-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: var(--accent); color: #1e1e2e;
+  font-size: .62rem; font-weight: 900;
+  min-width: 18px; height: 18px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+}
+
+/* ── Chat: drawer panel ── */
+#chat-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 320px; max-width: 88vw;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .22s ease;
+  z-index: 120;
+  box-shadow: -8px 0 24px rgba(0,0,0,.4);
+}
+#chat-drawer.active { transform: translateX(0); }
+.chat-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 800; font-size: .95rem;
+}
+.chat-close { background: none; border: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; line-height: 1; }
+.chat-close:hover { color: var(--text); }
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.chat-msg { display: flex; flex-direction: column; max-width: 85%; }
+.chat-msg .chat-msg-name { font-size: .68rem; color: var(--muted); margin-bottom: 2px; padding: 0 4px; }
+.chat-msg .chat-msg-bubble {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 11px;
+  font-size: .85rem;
+  word-break: break-word;
+  line-height: 1.4;
+}
+.chat-msg.me { align-self: flex-end; align-items: flex-end; }
+.chat-msg.me .chat-msg-bubble { background: var(--accent); color: #1e1e2e; border-color: var(--accent); }
+.chat-msg.system { align-self: center; max-width: 100%; }
+.chat-msg.system .chat-msg-bubble { background: transparent; border: none; color: var(--muted); font-size: .76rem; text-align: center; }
+
+.chat-emoji-panel {
+  display: none;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  max-height: 160px;
+  overflow-y: auto;
+}
+.chat-emoji-panel.active { display: grid; }
+.chat-emoji-panel button {
+  background: none; border: none; cursor: pointer;
+  font-size: 1.15rem; padding: 4px; border-radius: 6px;
+  transition: background .1s;
+}
+.chat-emoji-panel button:hover { background: var(--surface2); }
+
+.chat-input-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+.chat-emoji-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; width: 36px; height: 36px;
+  font-size: 1.05rem; cursor: pointer; flex-shrink: 0;
+}
+.chat-emoji-btn.active { border-color: var(--accent2); }
+.chat-input-row input {
+  flex: 1; padding: 8px 10px; font-size: .85rem;
+}
+.chat-send-btn {
+  background: var(--accent); color: #1e1e2e; border: none;
+  border-radius: 8px; width: 36px; height: 36px;
+  font-size: 1rem; font-weight: 900; cursor: pointer; flex-shrink: 0;
+}
+.chat-send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+@media (max-width: 520px) {
+  #chat-drawer { width: 100vw; max-width: 100vw; }
+}
+
+/* ── End screen ── */
+#screen-end { gap: 24px; }
+.end-trophy { font-size: 5rem; }
+.end-title { font-size: 2.2rem; font-weight: 900; }
+.end-sub { color: var(--muted); }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  .opponents-panel { width: 140px; min-width: 110px; }
+  .log-panel { width: 150px; min-width: 130px; }
+  :root { --card-w: 60px; --card-h: 90px; }
+}
+@media (max-width: 520px) {
+  .log-panel { display: none; }
+  .opponents-panel { width: 120px; min-width: 100px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LOBBY ═══════════════ -->
+<div id="screen-lobby" class="screen active">
+  <div>
+    <div class="lobby-title">Mèo <span>Nổ</span> 💥</div>
+    <div class="lobby-sub">Exploding Kittens — chơi một mình hoặc cùng bạn bè</div>
+  </div>
+
+  <!-- Form nhập tay — chỉ hiện khi truy cập trực tiếp (không qua sảnh) -->
+  <div class="card-lobby" id="join-form" style="display:none">
+    <div>
+      <div class="field-label">Tên của bạn</div>
+      <input id="inp-name" type="text" placeholder="Nhập tên..." maxlength="20" autocomplete="off">
+    </div>
+    <div>
+      <div class="field-label">Mã phòng</div>
+      <input id="inp-room" type="text" placeholder="Tạo mới hoặc nhập mã..." maxlength="20" autocomplete="off">
+    </div>
+    <div>
+      <div class="field-label">Số Bot (chơi một mình với AI)</div>
+      <select id="inp-bots">
+        <option value="0">0 Bot — chờ người khác vào</option>
+        <option value="1">1 Bot</option>
+        <option value="2">2 Bot</option>
+        <option value="3">3 Bot</option>
+        <option value="4">4 Bot</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="btn-join">Vào phòng →</button>
+  </div>
+
+  <!-- Thông tin đồng bộ từ sảnh — hiện khi có URL params -->
+  <div class="card-lobby" id="synced-info" style="display:none">
+    <div style="display:flex; align-items:center; gap:14px; padding:4px 0 8px;">
+      <img id="synced-avatar" src="" alt="avatar"
+        style="width:52px;height:52px;border-radius:50%;border:2px solid var(--accent);object-fit:cover;">
+      <div>
+        <div style="font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;">Người chơi</div>
+        <div style="font-size:1.1rem; font-weight:800;" id="synced-name">—</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div style="font-size:.82rem; color:var(--muted);">
+      Phòng: <span style="color:var(--yellow); font-weight:700;" id="synced-room">—</span>
+    </div>
+    <div style="font-size:.78rem; color:var(--muted);" id="synced-bot-info"></div>
+  </div>
+
+  <!-- Waiting room -->
+  <div class="card-lobby" id="waiting-room" style="display:none">
+    <div style="font-weight:700; font-size:1rem;">
+      Phòng: <span id="room-code" style="color:var(--yellow)"></span>
+      <button onclick="copyRoomCode()" style="background:none;border:none;cursor:pointer;font-size:.8rem;color:var(--muted);margin-left:6px;" title="Sao chép mã phòng">📋</button>
+    </div>
+    <div class="divider"></div>
+    <div class="lobby-players" id="lobby-players"></div>
+    <div style="font-size:.8rem; color:var(--muted)" id="waiting-msg">Đang chờ người chơi...</div>
+    <div style="display:flex; gap:8px">
+      <button class="btn btn-safe" id="btn-ready" style="flex:1">✓ Sẵn sàng</button>
+      <button class="btn btn-secondary btn-sm" id="btn-rules">Luật chơi</button>
+      <button class="btn btn-leave btn-sm" onclick="leaveRoom()">🚪 Rời phòng</button>
+    </div>
+    <a id="back-to-lobby" href="/" style="font-size:.78rem; color:var(--muted); text-align:center; text-decoration:none; margin-top:2px;">← Về sảnh chính</a>
+  </div>
+</div>
+
+<!-- ═══════════════ GAME ═══════════════ -->
+<div id="screen-game" class="screen">
+
+  <div class="topbar">
+    <div class="topbar-title">🐱💥 Mèo Nổ</div>
+    <div class="topbar-actions">
+      <div class="deck-badge" id="deck-count-badge">🃏 —</div>
+      <div class="turn-badge" id="turn-badge">—</div>
+      <button class="btn btn-leave btn-sm" id="btn-leave-game" onclick="leaveRoom()">🚪 Rời phòng</button>
+    </div>
+  </div>
+
+  <div class="game-body">
+
+    <!-- Opponents -->
+    <div class="opponents-panel" id="opponents-panel"></div>
+
+    <!-- Center -->
+    <div class="center-area">
+
+      <div class="table-area">
+        <div class="pile-wrapper">
+          <div class="pile-label">Deck</div>
+          <div class="card-face card-deck card-themed" id="draw-pile" onclick="sendDraw()">
+            <div class="card-pip tl">🃏</div>
+            <div class="card-art"><div class="card-emoji">🃏</div></div>
+            <div class="card-label">RÚT BÀI</div>
+            <div class="deck-count" id="deck-num">?</div>
+          </div>
+        </div>
+        <div class="pile-wrapper">
+          <div class="pile-label">Bỏ bài</div>
+          <div class="card-face card-discard card-themed" id="discard-pile">
+            <div class="card-pip tl">—</div>
+            <div class="card-art"><div class="card-emoji" id="discard-emoji">—</div></div>
+            <div class="card-label" id="discard-name"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-area" id="action-area">
+        Đang chờ game bắt đầu...
+      </div>
+
+    </div>
+
+    <!-- Log -->
+    <div class="log-panel">
+      <div class="log-title">Nhật ký</div>
+      <div id="log-entries"></div>
+    </div>
+
+  </div>
+
+  <!-- My hand -->
+  <div class="my-hand-area">
+    <div class="my-hand-label">
+      Tay bài của bạn
+      <span style="color:var(--accent2); font-size:.8rem" id="my-hand-count"></span>
+    </div>
+    <div class="my-hand-cards" id="my-hand-cards"></div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ END ═══════════════ -->
+<div id="screen-end" class="screen">
+  <div class="end-trophy" id="end-trophy">🏆</div>
+  <div class="end-title" id="end-title">—</div>
+  <div class="end-sub" id="end-sub"></div>
+  <div style="display:flex; gap:12px">
+    <button class="btn btn-primary" id="btn-rematch">Chơi lại</button>
+    <button class="btn btn-secondary" onclick="window.location.href='/'">← Về sảnh</button>
+  </div>
+</div>
+
+<!-- OVERLAYS -->
+
+<!-- See Future -->
+<div class="overlay" id="overlay-future">
+  <div class="overlay-box">
+    <div class="overlay-title" style="color:var(--yellow)">👁 Nhìn Tương Lai</div>
+    <div class="overlay-sub">3 lá trên đỉnh deck (từ trên xuống)</div>
+    <div class="future-cards" id="future-cards"></div>
+    <button class="btn btn-secondary" onclick="closeOverlay('overlay-future')">Đóng</button>
+  </div>
+</div>
+
+<!-- Choose Target -->
+<div class="overlay" id="overlay-target">
+  <div class="overlay-box">
+    <div class="overlay-title" style="color:var(--purple)" id="target-title">Chọn người chơi</div>
+    <div class="overlay-sub" id="target-sub"></div>
+    <div id="target-buttons" style="display:flex; flex-direction:column; gap:8px; width:100%"></div>
+  </div>
+</div>
+
+<!-- Steal — tự chọn 1 lá úp (mù) từ tay nạn nhân -->
+<div class="overlay" id="overlay-steal-pick">
+  <div class="overlay-box">
+    <div class="overlay-title" style="color:var(--purple)">🐱 Bốc 1 lá từ <span id="steal-target-name">...</span></div>
+    <div class="overlay-sub">Bạn không biết lá nào là lá gì — chọn 1 vị trí bất kỳ để bốc.</div>
+    <div class="future-cards" id="steal-pick-cards" style="flex-wrap:wrap"></div>
+  </div>
+</div>
+
+<!-- Favor give -->
+<div class="overlay" id="overlay-favor-give">
+  <div class="overlay-box">
+    <div class="overlay-title" style="color:var(--purple)">🎁 Cho bài</div>
+    <div class="overlay-sub" id="favor-give-sub">Bạn phải đưa 1 lá cho người đã dùng Favor.</div>
+    <div class="my-hand-cards" id="favor-give-cards" style="flex-wrap:wrap; overflow:visible"></div>
+  </div>
+</div>
+
+<!-- Insert Bomb -->
+<div class="overlay" id="overlay-bomb">
+  <div class="overlay-box">
+    <div class="overlay-title" style="color:var(--accent)">💣 Nhét bom vào deck</div>
+    <div class="overlay-sub">Bạn đã dùng Defuse! Chọn vị trí nhét bom lại vào deck.</div>
+    <div class="bomb-pos-label">Vị trí: <span id="bomb-pos-display">0</span> / <span id="bomb-deck-size">0</span></div>
+    <input type="range" class="bomb-slider" id="bomb-slider" min="0" max="10" value="0"
+      oninput="document.getElementById('bomb-pos-display').textContent=this.value">
+    <div style="font-size:.78rem; color:var(--muted)">0 = dưới đáy, max = trên đỉnh (rút ngay)</div>
+    <button class="btn btn-primary" onclick="sendInsertBomb()">Nhét bom!</button>
+  </div>
+</div>
+
+<!-- Rules -->
+<div class="overlay" id="overlay-rules">
+  <div class="overlay-box" style="max-height:80vh; overflow-y:auto; text-align:left; gap:12px">
+    <div class="overlay-title" style="font-size:1.2rem">📜 Luật chơi nhanh</div>
+    <div style="display:flex; flex-direction:column; gap:8px; font-size:.82rem; color:var(--muted); line-height:1.6">
+      <p>Mục tiêu: <b style="color:var(--text)">đừng rút phải Mèo Nổ</b> — người sống sót cuối cùng thắng.</p>
+      <p>Mỗi lượt: đánh 0 hoặc nhiều lá, rồi <b style="color:var(--text)">rút 1 lá</b> từ deck (trừ khi đã Skip/Attack).</p>
+      <div style="display:flex; flex-direction:column; gap:6px">
+        <div><span style="color:var(--accent)">💥 Mèo Nổ</span> — Nổ tung! Trừ khi có Defuse.</div>
+        <div><span style="color:var(--safe)">🛡 Defuse</span> — Thoát bom, nhét bom lại vào deck.</div>
+        <div><span style="color:var(--blue)">⏭ Skip</span> — Bỏ qua lượt rút bài.</div>
+        <div><span style="color:var(--accent2)">⚔ Attack</span> — Kết thúc lượt, người kế đi 2 lượt.</div>
+        <div><span style="color:var(--purple)">🎁 Favor</span> — Bắt người khác cho bạn 1 lá.</div>
+        <div><span style="color:#94e2d5">🔀 Shuffle</span> — Xáo bài ngẫu nhiên.</div>
+        <div><span style="color:var(--yellow)">👁 See Future</span> — Xem 3 lá trên đỉnh deck.</div>
+        <div><span style="color:#eba0ac">🚫 Nope</span> — Phủ nhận hành động người khác (bất cứ lúc nào).</div>
+        <div><span style="color:var(--purple)">🐈 Cat Cards</span> — Ghép 2 lá cùng loại để ăn trộm 1 lá ngẫu nhiên.</div>
+      </div>
+    </div>
+    <button class="btn btn-secondary" onclick="closeOverlay('overlay-rules')">Đóng</button>
+  </div>
+</div>
+
+<!-- Nope floating button -->
+<button id="nope-btn" onclick="sendNope()">NOPE!</button>
+
+<!-- Banner hiệu ứng hành động (skip/attack/defuse/nope/ăn trộm...) -->
+<div id="action-banner-stack"></div>
+<div id="fx-flash"></div>
+
+<!-- Chat -->
+<button id="chat-fab" onclick="toggleChat()" title="Mở chat">
+  💬
+  <span id="chat-badge" style="display:none">0</span>
+</button>
+
+<div id="chat-drawer">
+  <div class="chat-header">
+    <span>💬 Chat phòng</span>
+    <button class="chat-close" onclick="toggleChat(false)">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-emoji-panel" id="chat-emoji-panel"></div>
+  <div class="chat-input-row">
+    <button class="chat-emoji-btn" id="chat-emoji-btn" onclick="toggleEmojiPanel()">😊</button>
+    <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." maxlength="240" autocomplete="off">
+    <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">➤</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let socket;
+let myId = null;
+let myRoomId = null;
+let gameState = null;  // last received state
+let selectedCardIndex = null;
+let nopeTimeout = null;
+let isMyTurn = false;
+let lastLogLength = 0;
+let logInitialized = false;
+
+// ═══════════════════════════════════════
+// CARD DISPLAY HELPERS
+// ═══════════════════════════════════════
+const CARD_INFO = {
+  ExplodingKitten: { emoji: '💥', name: 'Mèo Nổ',      cls: 'card-ExplodingKitten' },
+  Defuse:          { emoji: '🛡', name: 'Defuse',       cls: 'card-Defuse' },
+  Skip:            { emoji: '⏭', name: 'Skip',          cls: 'card-Skip' },
+  Attack:          { emoji: '⚔', name: 'Attack',        cls: 'card-Attack' },
+  Favor:           { emoji: '🎁', name: 'Favor',         cls: 'card-Favor' },
+  Shuffle:         { emoji: '🔀', name: 'Shuffle',       cls: 'card-Shuffle' },
+  SeeTheFuture:    { emoji: '👁', name: 'See Future',    cls: 'card-SeeTheFuture' },
+  Nope:            { emoji: '🚫', name: 'Nope',          cls: 'card-Nope' },
+  Cat_TacoCat:     { emoji: '🌮', name: 'Taco Cat',      cls: 'card-Cat' },
+  Cat_Beard:       { emoji: '🧔', name: 'Beard Cat',     cls: 'card-Cat' },
+  Cat_Rainbow:     { emoji: '🌈', name: 'Rainbow Cat',   cls: 'card-Cat' },
+  Cat_Potato:      { emoji: '🥔', name: 'Potato Cat',    cls: 'card-Cat' },
+  Cat_Cattermelon: { emoji: '🍉', name: 'Cattermelon',   cls: 'card-Cat' },
+};
+
+// ───────────────────────────────────────
+// ẢNH THẬT CHO LÁ BÀI (tuỳ chọn) — NHIỀU ART/LOẠI
+// Giống bộ bài Mèo Nổ thật: mỗi LOẠI lá (ví dụ Defuse)
+// có thể có rất nhiều ảnh art khác nhau. Bạn chỉ cần dán
+// tất cả URL ảnh bạn có vào đúng mảng của loại lá đó.
+// Mỗi khi người chơi VÀO PHÒNG, hệ thống sẽ tự bốc ngẫu
+// nhiên 1 art trong mảng để dùng cho cả ván đó (đồng nhất,
+// không bị "nhảy" art giữa ván). Mảng để trống ([]) thì
+// loại lá đó vẫn hiển thị đẹp nhờ emoji to + màu nền riêng.
+// Ví dụ:
+// Defuse: [
+//   'images/defuse-1.png',
+//   'images/defuse-2.png',
+//   'images/defuse-3.png',
+// ],
+// ───────────────────────────────────────
+const CARD_ART_POOL = {
+  ExplodingKitten: [
+    'images/explodingkitten/Exploding-Kitten-C4.jpg',
+    'images/explodingkitten/Exploding-Kitten-Playground.jpg',
+    'images/explodingkitten/Exploding-Kitten-TNT-Ship.jpg',
+    'images/explodingkitten/Exploing-Kitten-Balloon-Bomb.jpg',
+    'images/explodingkitten/Exploing-Kitten-Holy-Water-Balloons.jpg',
+  ],
+
+  Defuse: [
+    'images/defuse/Defuse-Via-3AM-Flatulence.jpg',
+    'images/defuse/Defuse-Via-Excessive-Ball-Cleaning.jpg',
+    'images/defuse/Defuse-Via-Flattering-LARP.jpg',
+    'images/defuse/Defuse-Via-Nature-Documentaries.jpg',
+    'images/defuse/Defuse-Via-Porkback-Riding-into-the-Sunset-Together.jpg',
+    'images/defuse/Defuse-Via-Tummy-Rubs.jpg',
+  ],
+
+  Skip: [
+    'images/skip/Skip-Commandeer-a-Bunnyraptor.jpg',
+    'images/skip/Skip-Don-a-Portable-Cheetah-Butt.jpg',
+    'images/skip/Skip-Engage-the-Hypergoat.jpg',
+    'images/skip/Skip-Evade-Dirty-Sasquatch-Underpants.jpg',
+    'images/skip/Skip-Go-Base-Jumping-Using-a-Pair-of-Old-Lady-Boobs.jpg',
+  ],
+
+  Attack: [
+    'images\attack\Attack-Bear-o-Dactyl.jpg',
+    'images/attack/Attack-Catterwocky.jpg',
+    'images/attack/Attack-Crab-a-Pult.jpg',
+    'images/attack/Attack-Grow-a-Magnifient-Squid-Arm-and-Start-Slapping-Fat-Babies.jpg',
+    'images/attack/Attack-Thousand-Year-Back-Hair.jpg',
+  ],
+
+  Favor: [
+    'images/favor/Favor-Get-Enslaved-by-Party-Squirrels.jpg',
+    'images/favor/Favor-Rub-Peanut-Butter-on-Your-Belly-Button.jpg',
+    'images/favor/Favor-Teach-Someone-a-New-Palindrome.jpg',
+    'images/favor/Favour-Give-A-Horsey-Ride-To-A-Horse.jpg',
+  ],
+
+  Shuffle: [
+    'images/shuffle/Shuffle-A-Transdimensional-Litter-Box-Materializes.jpg',
+    'images/shuffle/Shuffle-An-Asparagus-Bun-Dragon-Appears.jpg',
+    'images/shuffle/Shuffle-An-Electromagnetic-Pomeranian-Storm.jpg',
+    'images/shuffle/Shuffle-Discover-You-Have-a-Toilet-Werewolf.jpg',
+  ],
+
+  SeeTheFuture: [
+    'images/seethefuture/See-the-Future-Ask-the-All-Seeing-Goat-Wizard.jpg',
+    'images/seethefuture/See-the-Future-Discover-a-Boob-Wizard.jpg',
+    'images/seethefuture/See-the-Future-Fear-Upon-a-Unicorn-Enchilada.jpg',
+    'images/seethefuture/See-the-Future-Rub-the-Belly-of-a-Pig-a-Corn.jpg',
+    'images/seethefuture/See-the-Future-Weave-an-Infinity-Boner.jpg',
+  ],
+
+  Nope: [
+    'images/nope/Nope-a-Nope-Ninja.jpg',
+    'images/nope/Nope-Feed-your-Opponent-a-Nope-Sandwich.jpg',
+    'images/nope/Nope-Nopestradamus-Speaks-the-Truth.jpg',
+    'images/nope/Nope-Put-on-Your-Necktie-of-Nope.jpg',
+    'images/nope/Nope-The-Pope-of-Nope-has-Spoken.jpg',
+  ],
+
+  Cat_TacoCat: ['images/cat/Tacocat.jpg'],
+  Cat_Beard: ['images/cat/Beard-Cat.jpg'],
+  Cat_Rainbow: ['images/cat/Rainbow-Ralphing-Cat.jpg'],
+  Cat_Potato: ['images/cat/Hairy-Potato-Cat.jpg'],
+  Cat_Cattermelon: ['images/cat/Cattermelon.jpg'],
+};
+
+// CARD_IMAGES = bản "đã rút số" cho ván hiện tại — map loại lá -> 1 URL.
+// Được tạo lại mỗi khi vào phòng (xem assignRandomCardArt()).
+let CARD_IMAGES = {};
+
+function assignRandomCardArt() {
+  const next = {};
+  Object.keys(CARD_ART_POOL).forEach(type => {
+    const pool = CARD_ART_POOL[type];
+    next[type] = (pool && pool.length)
+      ? pool[Math.floor(Math.random() * pool.length)]
+      : '';
+  });
+  CARD_IMAGES = next;
+}
+// Gọi 1 lần ngay khi script load, để có giá trị mặc định
+// trước khi người dùng thực sự join phòng.
+assignRandomCardArt();
+
+function cardInfo(value) {
+  return CARD_INFO[value] || { emoji: '🃏', name: value, cls: '' };
+}
+
+// Dựng khung lá bài chung (dùng cho cả lá trên tay và lá lớn trong overlay)
+function buildCardFace(value, { extraClass = '' } = {}) {
+  const ci = cardInfo(value);
+  const imgUrl = CARD_IMAGES[value];
+
+  const el = document.createElement('div');
+  el.className = `${extraClass} ${ci.cls} card-themed`.trim();
+
+  const pipTop = document.createElement('div');
+  pipTop.className = 'card-pip tl';
+  pipTop.textContent = ci.emoji;
+
+  const art = document.createElement('div');
+  art.className = 'card-art' + (imgUrl ? ' has-image' : '');
+  if (imgUrl) {
+    art.style.backgroundImage = `url('${imgUrl}')`;
+  } else {
+    const emojiSpan = document.createElement('div');
+    emojiSpan.className = 'card-emoji';
+    emojiSpan.textContent = ci.emoji;
+    art.appendChild(emojiSpan);
+  }
+
+  const pipBottom = document.createElement('div');
+  pipBottom.className = 'card-pip br';
+  pipBottom.textContent = ci.emoji;
+
+  const label = document.createElement('div');
+  label.className = 'card-label';
+  label.textContent = ci.name;
+
+  el.appendChild(pipTop);
+  el.appendChild(art);
+  el.appendChild(pipBottom);
+  el.appendChild(label);
+  return el;
+}
+
+function makeCardEl(value, index = null, clickable = false) {
+  const el = buildCardFace(value, { extraClass: clickable ? 'hand-card' : 'hand-card disabled' });
+  if (index !== null && clickable) {
+    el.dataset.index = index;
+    el.addEventListener('click', () => handleCardClick(index, value));
+  }
+  return el;
+}
+
+function makeFaceCard(value) {
+  const el = buildCardFace(value, { extraClass: 'card-face' });
+  el.style.width = '72px';
+  el.style.height = '108px';
+  return el;
+}
+
+// ═══════════════════════════════════════
+// CONNECT + LOBBY
+// ═══════════════════════════════════════
+// ═══════════════════════════════════════
+// INIT — ĐỌC URL PARAMS TỪ SẢNH
+// ═══════════════════════════════════════
+(function init() {
+  const params = new URLSearchParams(location.search);
+  const pName   = params.get('name')   || localStorage.getItem('playerName') || '';
+  const pAvatar = params.get('avatar') || localStorage.getItem('playerAvatar') || '';
+  const pRoom   = params.get('room')   || '';
+  const pBots   = parseInt(params.get('bots') || '0');
+
+  if (pName && pRoom) {
+    // Đến từ sảnh — hiện panel đồng bộ rồi tự join
+    document.getElementById('synced-info').style.display = 'flex';
+    document.getElementById('synced-info').style.flexDirection = 'column';
+    document.getElementById('synced-name').textContent = pName;
+    document.getElementById('synced-room').textContent = pRoom;
+    if (pAvatar) document.getElementById('synced-avatar').src = pAvatar;
+    if (pBots > 0) document.getElementById('synced-bot-info').textContent = `Chế độ: ${pBots} Bot AI`;
+    else document.getElementById('synced-bot-info').textContent = 'Chế độ: Multiplayer';
+
+    autoJoin(pName, pAvatar, pRoom, pBots);
+  } else {
+    // Truy cập trực tiếp — hiện form nhập tay
+    document.getElementById('join-form').style.display = 'flex';
+    document.getElementById('join-form').style.flexDirection = 'column';
+    if (pName) document.getElementById('inp-name').value = pName;
+    if (pRoom) document.getElementById('inp-room').value = pRoom;
+    document.getElementById('inp-bots').value = pBots;
+  }
+})();
+
+function autoJoin(name, avatar, room, bots) {
+  myRoomId = room;
+  assignRandomCardArt(); // chia random art cho mỗi loại lá ngay khi vào phòng
+  socket = io({ transports: ['websocket'] });
+  bindSocketEvents();
+  socket.on('connect', () => {
+    myId = socket.id;
+    socket.emit('kitty:join', { roomId: room, name, botCount: bots });
+    document.getElementById('synced-info').style.display = 'none';
+    document.getElementById('waiting-room').style.display = 'flex';
+    document.getElementById('waiting-room').style.flexDirection = 'column';
+    document.getElementById('room-code').textContent = room;
+  });
+}
+
+// Form nhập tay (truy cập trực tiếp)
+document.getElementById('btn-join').addEventListener('click', () => {
+  const name = document.getElementById('inp-name').value.trim();
+  const room = document.getElementById('inp-room').value.trim() || randomRoom();
+  const bots = parseInt(document.getElementById('inp-bots').value) || 0;
+  if (!name) { toast('Nhập tên đi bạn!'); return; }
+  document.getElementById('inp-room').value = room;
+  autoJoin(name, '', room, bots);
+});
+
+document.getElementById('btn-ready').addEventListener('click', () => {
+  socket.emit('kitty:ready');
+  document.getElementById('btn-ready').disabled = true;
+  document.getElementById('btn-ready').textContent = '⌛ Đã sẵn sàng';
+});
+
+document.getElementById('btn-rules').addEventListener('click', () => openOverlay('overlay-rules'));
+document.getElementById('btn-rematch').addEventListener('click', () => {
+  socket.emit('kitty:rematch');
+  showScreen('screen-lobby');
+  document.getElementById('waiting-room').style.display = 'flex';
+  document.getElementById('waiting-room').style.flexDirection = 'column';
+  document.getElementById('synced-info').style.display = 'none';
+  document.getElementById('join-form').style.display = 'none';
+  document.getElementById('btn-ready').disabled = false;
+  document.getElementById('btn-ready').textContent = '✓ Sẵn sàng';
+});
+
+// ═══════════════════════════════════════
+// SOCKET EVENTS
+// ═══════════════════════════════════════
+function bindSocketEvents() {
+  socket.on('kitty:lobby', ({ players, botCount }) => {
+    const container = document.getElementById('lobby-players');
+    container.innerHTML = '';
+    players.forEach(p => {
+      const el = document.createElement('div');
+      el.className = `lobby-player${p.ready ? ' ready' : ''}`;
+      el.innerHTML = `<div class="dot"></div><span>${p.name}</span><span class="tag">${p.ready ? '✓ Sẵn sàng' : '...'}</span>`;
+      container.appendChild(el);
+    });
+    // Bots
+    for (let i = 0; i < botCount; i++) {
+      const el = document.createElement('div');
+      el.className = 'lobby-player ready';
+      el.innerHTML = `<div class="dot"></div><span>🤖 Bot ${i+1}</span><span class="tag">AI</span>`;
+      container.appendChild(el);
+    }
+    const total = players.length + botCount;
+    const allReady = players.every(p => p.ready);
+    document.getElementById('waiting-msg').textContent =
+      total < 2 ? `Cần ít nhất 2 người/bot (hiện ${total})` :
+      allReady ? '🚀 Đang khởi động...' : `Đang chờ (${total} người)...`;
+  });
+
+  socket.on('kitty:game_start', ({ playerIds, playerNames, botIds }) => {
+    showScreen('screen-game');
+    toast('Game bắt đầu!');
+    lastLogLength = 0;
+    logInitialized = false;
+  });
+
+  socket.on('kitty:state', (state) => {
+    gameState = state;
+    myId = socket.id;
+    renderGame(state);
+  });
+
+  socket.on('kitty:event', (event) => {
+    handleEvent(event);
+  });
+
+  socket.on('kitty:game_over', ({ winner, winnerName }) => {
+    setTimeout(() => {
+      const isMe = winner === myId;
+      document.getElementById('end-trophy').textContent = isMe ? '🏆' : '💀';
+      document.getElementById('end-title').textContent = isMe ? 'Bạn thắng!' : `${winnerName} thắng!`;
+      document.getElementById('end-sub').textContent = isMe ? 'Bạn là người sống sót cuối cùng!' : 'Bạn đã bị loại.';
+      showScreen('screen-end');
+    }, 1200);
+  });
+
+  socket.on('kitty:error', (msg) => toast('⚠ ' + msg));
+
+  socket.on('kitty:log', (msg) => addLog(msg));
+
+  socket.on('kitty:player_left', ({ name }) => toast(`${name} đã rời phòng`));
+
+  // Chat — server cần emit 'kitty:chat' với { id, name, message }
+  // khi nhận tin nhắn từ bất kỳ người chơi nào trong phòng.
+  socket.on('kitty:chat', (data) => {
+    if (!data) return;
+    const isMe = data.id === myId;
+    appendChatMessage(data.name || 'Ẩn danh', data.message || '', isMe);
+  });
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function renderGame(G) {
+  if (!G) return;
+  const cp = G.currentPlayer;
+  isMyTurn = cp === myId && G.phase === 'playing';
+
+  // Topbar
+  document.getElementById('deck-num').textContent = G.deckSize;
+  document.getElementById('deck-count-badge').textContent = `🃏 ${G.deckSize} lá`;
+  const cpName = G.playerNames[cp] || cp;
+  document.getElementById('turn-badge').textContent =
+    isMyTurn ? '✨ Lượt của bạn' : `${cpName} đang đi...`;
+
+  // Draw pile interactivity
+  const drawPile = document.getElementById('draw-pile');
+  drawPile.style.opacity = canDraw(G) ? '1' : '0.5';
+  drawPile.style.cursor = canDraw(G) ? 'pointer' : 'default';
+
+  // Discard
+  const top = G.discardPile[G.discardPile.length - 1];
+  if (top) {
+    const ci = cardInfo(top.value);
+    const discardEl = document.getElementById('discard-pile');
+    discardEl.className = `card-face card-discard card-themed ${ci.cls}`;
+    document.getElementById('discard-emoji').textContent = ci.emoji;
+    document.getElementById('discard-name').textContent = ci.name;
+    const pip = discardEl.querySelector('.card-pip.tl');
+    if (pip) pip.textContent = ci.emoji;
+    const art = document.getElementById('discard-emoji').parentElement;
+    const imgUrl = CARD_IMAGES[top.value];
+    if (art) {
+      if (imgUrl) {
+        art.classList.add('has-image');
+        art.style.backgroundImage = `url('${imgUrl}')`;
+      } else {
+        art.classList.remove('has-image');
+        art.style.backgroundImage = '';
+      }
+    }
+  }
+
+  // Opponents
+  renderOpponents(G);
+
+  // My hand
+  renderMyHand(G);
+
+  // Action area
+  renderActionArea(G);
+
+  // Nope button: visible if someone else just played something
+  // (managed via events)
+
+  // Log
+  const logEntries = document.getElementById('log-entries');
+  logEntries.innerHTML = '';
+  (G.log || []).slice().reverse().forEach(msg => {
+    const el = document.createElement('div');
+    el.className = 'log-entry' + (msg.includes('💥') || msg.includes('🏆') ? ' highlight' : '');
+    el.textContent = msg;
+    logEntries.appendChild(el);
+  });
+
+  // Phát hiệu ứng (banner nổi + rung màn hình...) cho các dòng nhật ký MỚI
+  // — đây là nguồn thông tin chính xác nhất về việc ai vừa đánh bài/bốc bài
+  // gì, nên tận dụng nó để không bỏ lỡ bất kỳ hành động nào.
+  announceNewLogEntries(G.log || []);
+}
+
+function announceNewLogEntries(log) {
+  if (!logInitialized) {
+    // Lần render đầu tiên của 1 ván — chỉ ghi nhận mốc, không phát lại lịch sử
+    lastLogLength = log.length;
+    logInitialized = true;
+    return;
+  }
+  if (log.length <= lastLogLength) {
+    lastLogLength = log.length;
+    return;
+  }
+  const newEntries = log.slice(lastLogLength);
+  lastLogLength = log.length;
+  newEntries.forEach(msg => showActionBanner(msg));
+}
+
+function canDraw(G) {
+  return isMyTurn && !G.waitingFor && !G.insertBombMode && G.phase === 'playing';
+}
+
+function renderOpponents(G) {
+  const panel = document.getElementById('opponents-panel');
+  panel.innerHTML = '';
+  G.playerIds.forEach(id => {
+    if (id === myId) return;
+    const name = G.playerNames[id] || id;
+    const isBot = id.startsWith('bot_');
+    const alive = G.alive.includes(id);
+    const isCurrent = G.currentPlayer === id;
+    const count = G.handSizes[id] || 0;
+
+    const el = document.createElement('div');
+    el.className = `opponent-card${isCurrent ? ' current-turn' : ''}${!alive ? ' eliminated' : ''}`;
+    const mini = Array.from({ length: count }, () => `<div class="mini-card"></div>`).join('');
+    el.innerHTML = `
+      <div class="opponent-name">${isBot ? '🤖 ' : ''}${name}${!alive ? ' 💀' : ''}</div>
+      <div class="opponent-count">${count} lá${isCurrent ? ' • đang đi' : ''}</div>
+      <div class="opponent-cards-row">${mini}</div>
+    `;
+    panel.appendChild(el);
+  });
+}
+
+function renderMyHand(G) {
+  const container = document.getElementById('my-hand-cards');
+  container.innerHTML = '';
+  const hand = G.myHand || [];
+  document.getElementById('my-hand-count').textContent = `(${hand.length} lá)`;
+
+  // Tìm xem đang ở trạng thái favor_give thì render riêng
+  if (G.waitingFor?.type === 'favor_give_card' && G.waitingFor.target === myId) {
+    openFavorGive(hand);
+    return;
+  }
+  closeOverlay('overlay-favor-give');
+
+  hand.forEach((card, i) => {
+    const playable = canPlayCard(G, card, i, hand);
+    const el = makeCardEl(card.value, i, playable);
+    if (selectedCardIndex === i) el.classList.add('selected');
+    container.appendChild(el);
+  });
+}
+
+function canPlayCard(G, card, index, hand) {
+  if (!isMyTurn) return false;
+  if (G.insertBombMode) return false;
+  if (G.waitingFor) return false;
+  if (card.value === 'Defuse' || card.value === 'ExplodingKitten') return false;
+  if (card.value.startsWith('Cat_')) {
+    // cần có cặp
+    return hand.filter(c => c.value === card.value).length >= 2;
+  }
+  return true;
+}
+
+function renderActionArea(G) {
+  const area = document.getElementById('action-area');
+  area.innerHTML = '';
+  area.className = 'action-area';
+
+  if (G.phase !== 'playing') return;
+
+  if (G.insertBombMode && G.waitingFor?.player === myId) {
+    const deckSize = G.deckSize;
+    document.getElementById('bomb-slider').max = deckSize;
+    document.getElementById('bomb-slider').value = Math.floor(deckSize / 2);
+    document.getElementById('bomb-pos-display').textContent = Math.floor(deckSize / 2);
+    document.getElementById('bomb-deck-size').textContent = deckSize;
+    openOverlay('overlay-bomb');
+    return;
+  }
+  closeOverlay('overlay-bomb');
+  closeOverlay('overlay-steal-pick');
+
+  if (G.waitingFor) {
+    const wf = G.waitingFor;
+    if (wf.player === myId || wf.requester === myId) {
+      area.className = 'action-area highlight';
+      if (wf.type === 'favor_choose_target' || wf.type === 'cat_choose_target') {
+        const label = wf.type === 'favor_choose_target' ? 'Chọn người bạn muốn xin bài:' : 'Chọn người để ăn trộm bài:';
+        area.innerHTML = `<div>${label}</div>`;
+        const btns = document.createElement('div');
+        btns.className = 'action-buttons';
+        (wf.options || []).forEach(targetId => {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-warn btn-sm';
+          btn.textContent = G.playerNames[targetId] || targetId;
+          btn.addEventListener('click', () => sendChooseTarget(targetId));
+          btns.appendChild(btn);
+        });
+        area.appendChild(btns);
+        return;
+      }
+      if (wf.type === 'cat_choose_card') {
+        area.innerHTML = `<div>🐱 Tự bốc 1 lá từ ${G.playerNames[wf.target] || wf.target}...</div>`;
+        openStealPick(wf.target, wf.handSize);
+        return;
+      }
+    }
+
+    if (wf.type === 'favor_give_card' && wf.target === myId) {
+      area.className = 'action-area highlight';
+      area.innerHTML = `<div>🎁 ${G.playerNames[wf.requester] || wf.requester} muốn 1 lá bài của bạn!</div>`;
+      return;
+    }
+
+    // Đang chờ người khác
+    area.innerHTML = `<div>⌛ Đang chờ ${G.playerNames[wf.player || wf.target] || '...'}...</div>`;
+    return;
+  }
+
+  if (isMyTurn) {
+    area.className = 'action-area highlight';
+    area.innerHTML = `<div>Lượt của bạn! Đánh lá hoặc <b>rút bài</b> từ deck.</div>
+      <div style="font-size:.78rem; color:var(--muted)">Còn ${G.turnsLeft} lượt rút</div>`;
+  } else {
+    const cp = G.currentPlayer;
+    area.innerHTML = `<div>⌛ Đang chờ ${G.playerNames[cp] || cp}...</div>`;
+  }
+}
+
+// ═══════════════════════════════════════
+// EVENTS FROM SERVER
+// ═══════════════════════════════════════
+function nameOf(id) {
+  if (!id) return '';
+  if (id === myId) return 'Bạn';
+  return gameState?.playerNames?.[id] || id;
+}
+
+function handleEvent(ev) {
+  switch (ev.type) {
+    case 'see_future':
+      if (ev.privatePlayer === myId) {
+        showFuture(ev.cards);
+      }
+      break;
+
+    case 'exploded': {
+      flashScreen('boom');
+      shakeScreen();
+      if (ev.player === myId) {
+        toast('💥 Bạn bị nổ tung!');
+      } else {
+        toast(`💥 ${nameOf(ev.player)} đã nổ!`);
+      }
+      break;
+    }
+
+    case 'defused': {
+      flashScreen('safe');
+      if (ev.player === myId) {
+        toast('🛡 Bạn đã dùng Defuse! Chọn vị trí nhét bom.');
+      } else {
+        toast(`🛡 ${nameOf(ev.player)} dùng Defuse!`);
+      }
+      break;
+    }
+
+    case 'skip':
+      toast(`⏭ ${nameOf(ev.player) || 'Có người'} dùng Skip — bỏ qua lượt rút bài!`);
+      break;
+
+    case 'attack':
+      shakeScreen();
+      toast(`⚔ ${nameOf(ev.player) || 'Có người'} dùng Attack — lượt kế tiếp phải đi 2 lần!`);
+      break;
+
+    case 'shuffle':
+      toast(`🔀 ${nameOf(ev.player) || 'Có người'} xáo lại bộ bài!`);
+      break;
+
+    case 'bomb_inserted':
+      toast(`💣 ${nameOf(ev.player) || 'Có người'} đã nhét Mèo Nổ trở lại deck.`);
+      break;
+
+    case 'cat_done':
+      toast(`🐱 ${nameOf(ev.to) || 'Có người'} dùng cặp lá mèo để ăn trộm 1 lá bài!`);
+      break;
+
+    case 'favor_done':
+      toast('🎁 Favor đã hoàn tất — 1 lá bài đã được trao đi.');
+      break;
+
+    case 'drew':
+      // Rút bài bình thường mỗi lượt — không cần toast để tránh spam,
+      // nhưng nếu server có ghi log thì banner phía trên vẫn sẽ hiện.
+      break;
+
+    case 'nope':
+      showNopeBtn(false);
+      toast(ev.noped ? '🚫 NOPE! Hành động bị phủ nhận!' : '🚫 NOPE bị phủ nhận! Hành động vẫn xảy ra.');
+      break;
+  }
+
+  // Hiện Nope button khi có event có thể bị Nope
+  const nopeable = ['skip','attack','favor_choose_target','cat_choose_target','shuffle','see_future'];
+  if (nopeable.includes(ev.type) && gameState) {
+    const myHand = gameState.myHand || [];
+    if (myHand.some(c => c.value === 'Nope')) {
+      showNopeBtn(true);
+      clearTimeout(nopeTimeout);
+      nopeTimeout = setTimeout(() => showNopeBtn(false), 4000);
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+// USER ACTIONS
+// ═══════════════════════════════════════
+function handleCardClick(index, value) {
+  if (!isMyTurn || !gameState) return;
+
+  selectedCardIndex = selectedCardIndex === index ? null : index;
+  renderMyHand(gameState);
+
+  if (selectedCardIndex !== null) {
+    sendPlay(selectedCardIndex);
+    selectedCardIndex = null;
+  }
+}
+
+function sendPlay(cardIndex) {
+  socket.emit('kitty:play', { cardIndex });
+}
+
+function sendDraw() {
+  if (!canDraw(gameState)) return;
+  socket.emit('kitty:draw');
+}
+
+function sendNope() {
+  socket.emit('kitty:nope');
+  showNopeBtn(false);
+}
+
+function sendInsertBomb() {
+  const pos = parseInt(document.getElementById('bomb-slider').value);
+  socket.emit('kitty:insert_bomb', { position: pos });
+  closeOverlay('overlay-bomb');
+}
+
+function sendChooseTarget(targetId) {
+  socket.emit('kitty:choose_target', { targetId });
+  closeOverlay('overlay-target');
+}
+
+function openStealPick(targetId, handSize) {
+  document.getElementById('steal-target-name').textContent = nameOf(targetId);
+  const container = document.getElementById('steal-pick-cards');
+  container.innerHTML = '';
+  for (let i = 0; i < (handSize || 0); i++) {
+    const el = document.createElement('div');
+    el.className = 'card-face card-deck card-themed';
+    el.innerHTML = `<div class="card-art"><div class="card-emoji">❓</div></div>`;
+    el.addEventListener('click', () => sendChooseStolenCard(i));
+    container.appendChild(el);
+  }
+  openOverlay('overlay-steal-pick');
+}
+
+function sendChooseStolenCard(cardIndex) {
+  socket.emit('kitty:choose_stolen_card', { cardIndex });
+  closeOverlay('overlay-steal-pick');
+}
+
+// ═══════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function openOverlay(id) {
+  document.getElementById(id).classList.add('active');
+}
+
+function closeOverlay(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+function toast(msg, duration = 2800) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function addLog(msg) {
+  const el = document.getElementById('log-entries');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry' + (msg.includes('💥') || msg.includes('🏆') ? ' highlight' : '');
+  entry.textContent = msg;
+  el.prepend(entry);
+  while (el.children.length > 30) el.lastChild.remove();
+}
+
+// ═══════════════════════════════════════
+// HIỆU ỨNG HÀNH ĐỘNG (banner + flash + rung)
+// Mỗi khi có dòng nhật ký mới (= có ai vừa
+// đánh bài / bốc bài / bị ảnh hưởng), hiện
+// 1 banner nổi bật ở đầu màn hình kèm icon
+// + màu riêng cho từng loại bài, để không
+// còn bị "im lặng bốc bài" nữa.
+// ═══════════════════════════════════════
+const EVENT_VISUAL_RULES = [
+  { test: /nổ tung|rút phải mèo nổ|exploding/i, emoji: '💥', color: 'var(--accent)', fx: 'boom', shake: true },
+  { test: /defuse|thoát bom|vô hiệu hoá bom/i,   emoji: '🛡', color: 'var(--safe)',  fx: 'safe' },
+  { test: /nhét bom/i,                            emoji: '💣', color: 'var(--accent)' },
+  { test: /skip|bỏ qua lượt/i,                    emoji: '⏭', color: 'var(--blue)' },
+  { test: /attack|tấn công/i,                     emoji: '⚔', color: 'var(--accent2)', shake: true },
+  { test: /favor|xin bài|cho .*1? ?lá|đưa .*1? ?lá/i, emoji: '🎁', color: 'var(--purple)' },
+  { test: /shuffle|xáo bài/i,                     emoji: '🔀', color: '#94e2d5' },
+  { test: /tương lai|nhìn trước|see.*future/i,     emoji: '👁', color: 'var(--yellow)' },
+  { test: /nope|phủ nhận/i,                        emoji: '🚫', color: '#eba0ac' },
+  { test: /ăn trộm|cặp (lá )?mèo|cat/i,            emoji: '🐱', color: 'var(--purple)' },
+  { test: /thắng|chiến thắng|🏆/i,                 emoji: '🏆', color: 'var(--yellow)' },
+  { test: /rời phòng|đã ngắt kết nối/i,            emoji: '🚪', color: 'var(--muted)' },
+  { test: /rút (1 )?lá|bốc bài/i,                  emoji: '🃏', color: 'var(--blue)' },
+];
+const EVENT_VISUAL_DEFAULT = { emoji: '📜', color: 'var(--muted)' };
+
+function detectEventVisual(message) {
+  for (const rule of EVENT_VISUAL_RULES) {
+    if (rule.test.test(message)) return rule;
+  }
+  return EVENT_VISUAL_DEFAULT;
+}
+
+function showActionBanner(message) {
+  if (!message) return;
+  const info = detectEventVisual(message);
+  const stack = document.getElementById('action-banner-stack');
+  if (stack) {
+    const el = document.createElement('div');
+    el.className = 'action-banner';
+    el.style.setProperty('--banner-accent', info.color);
+
+    const icon = document.createElement('span');
+    icon.className = 'action-banner-icon';
+    icon.textContent = info.emoji;
+
+    const text = document.createElement('span');
+    text.className = 'action-banner-text';
+    text.textContent = message;
+
+    el.appendChild(icon);
+    el.appendChild(text);
+    stack.appendChild(el);
+
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => {
+      el.classList.add('hide');
+      setTimeout(() => el.remove(), 350);
+    }, 2600);
+
+    while (stack.children.length > 4) stack.firstChild.remove();
+  }
+
+  if (info.fx) flashScreen(info.fx);
+  if (info.shake) shakeScreen();
+}
+
+function flashScreen(kind) {
+  const el = document.getElementById('fx-flash');
+  if (!el) return;
+  el.classList.remove('flash-boom', 'flash-safe');
+  // buộc reflow để animation chạy lại nếu trigger liên tiếp
+  void el.offsetWidth;
+  el.classList.add(kind === 'safe' ? 'flash-safe' : 'flash-boom');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('flash-boom', 'flash-safe'), 720);
+}
+
+function shakeScreen() {
+  document.body.classList.remove('shake-screen');
+  void document.body.offsetWidth;
+  document.body.classList.add('shake-screen');
+  clearTimeout(document.body._shakeT);
+  document.body._shakeT = setTimeout(() => document.body.classList.remove('shake-screen'), 420);
+}
+
+function showFuture(cards) {
+  const container = document.getElementById('future-cards');
+  container.innerHTML = '';
+  (cards || []).forEach(c => container.appendChild(makeFaceCard(c.value)));
+  openOverlay('overlay-future');
+}
+
+function openFavorGive(hand) {
+  const container = document.getElementById('favor-give-cards');
+  container.innerHTML = '';
+  hand.forEach((card, i) => {
+    const el = makeCardEl(card.value, i, true);
+    el.addEventListener('click', () => {
+      socket.emit('kitty:favor_give', { cardIndex: i });
+      closeOverlay('overlay-favor-give');
+    });
+    container.appendChild(el);
+  });
+  openOverlay('overlay-favor-give');
+}
+
+function showNopeBtn(visible) {
+  const btn = document.getElementById('nope-btn');
+  if (visible) btn.classList.add('visible');
+  else btn.classList.remove('visible');
+}
+
+function randomRoom() {
+  const words = ['meo','bom','chua','nhat','heo','ga','vit','ca','cho','lon'];
+  return words[Math.floor(Math.random()*words.length)] + Math.floor(Math.random()*900+100);
+}
+
+function copyRoomCode() {
+  const code = document.getElementById('room-code').textContent;
+  if (code) {
+    navigator.clipboard.writeText(code).then(() => toast('📋 Đã sao chép mã phòng: ' + code));
+  }
+}
+
+// ═══════════════════════════════════════
+// CHAT
+// ═══════════════════════════════════════
+const EMOJI_LIST = [
+  '😀','😂','😅','😍','😎','🤔','😴','😭','😡','😱',
+  '👍','👎','👏','🙏','💪','✌️','🤝','👀','🔥','💯',
+  '🐱','💥','🛡','⚔','🎁','🔀','👁','🚫','🌮','🍉',
+  '🏆','💀','🎉','❤️','😹','🤝','⏭','🥔','🧔','🌈'
+];
+
+let chatUnread = 0;
+
+function initChatEmojiPanel() {
+  const panel = document.getElementById('chat-emoji-panel');
+  if (!panel || panel.childElementCount) return;
+  EMOJI_LIST.forEach(e => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = e;
+    btn.addEventListener('click', () => {
+      const input = document.getElementById('chat-input');
+      input.value += e;
+      input.focus();
+    });
+    panel.appendChild(btn);
+  });
+}
+
+function toggleChat(forceState) {
+  const drawer = document.getElementById('chat-drawer');
+  const shouldOpen = typeof forceState === 'boolean' ? forceState : !drawer.classList.contains('active');
+  drawer.classList.toggle('active', shouldOpen);
+  if (shouldOpen) {
+    chatUnread = 0;
+    updateChatBadge();
+    setTimeout(() => document.getElementById('chat-input')?.focus(), 200);
+  }
+}
+
+function toggleEmojiPanel() {
+  const panel = document.getElementById('chat-emoji-panel');
+  const btn = document.getElementById('chat-emoji-btn');
+  panel.classList.toggle('active');
+  btn.classList.toggle('active');
+}
+
+function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const message = input.value.trim();
+  if (!message) return;
+  if (!socket || !socket.connected) {
+    toast('⚠ Chưa kết nối tới phòng');
+    return;
+  }
+  socket.emit('kitty:chat', { message });
+  const myName = gameState?.playerNames?.[myId] || 'Bạn';
+  appendChatMessage(myName, message, true);
+  input.value = '';
+  input.focus();
+}
+
+function appendChatMessage(name, message, isMe = false) {
+  const container = document.getElementById('chat-messages');
+  if (!container) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg' + (isMe ? ' me' : '');
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'chat-msg-name';
+  nameEl.textContent = isMe ? 'Bạn' : name;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-msg-bubble';
+  bubble.textContent = message;
+
+  wrap.appendChild(nameEl);
+  wrap.appendChild(bubble);
+  container.appendChild(wrap);
+  container.scrollTop = container.scrollHeight;
+
+  const drawer = document.getElementById('chat-drawer');
+  if (!isMe && !drawer.classList.contains('active')) {
+    chatUnread++;
+    updateChatBadge();
+  }
+}
+
+function updateChatBadge() {
+  const badge = document.getElementById('chat-badge');
+  if (!badge) return;
+  if (chatUnread > 0) {
+    badge.style.display = 'flex';
+    badge.textContent = chatUnread > 9 ? '9+' : chatUnread;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initChatEmojiPanel();
+  const chatInput = document.getElementById('chat-input');
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendChatMessage();
+    });
+  }
+});
+// Trang có thể đã load xong trước khi script này chạy (vì script ở cuối body)
+initChatEmojiPanel();
+
+// ═══════════════════════════════════════
+// RỜI PHÒNG
+// ═══════════════════════════════════════
+function leaveRoom() {
+  const ok = window.confirm('Bạn chắc chắn muốn rời phòng?');
+  if (!ok) return;
+  try {
+    if (socket && socket.connected) {
+      socket.emit('kitty:leave');
+      socket.disconnect();
+    }
+  } catch (e) { /* ignore */ }
+  window.location.href = '/';
+}
+
+</script>
+</body>
+</html>

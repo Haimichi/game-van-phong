@@ -3,15 +3,19 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
+const { registerKitty } = require('./games/kittyServer');
 
 // Cấp quyền đọc thư mục games
 app.use('/games', express.static(path.join(__dirname, 'games')));
+// Cấp quyền đọc thư mục images (chứa art các lá bài, v.v.) — nằm ngoài public
+app.use('/images', express.static(path.join(__dirname, 'images')));
 app.use(express.static('public'));
 
 app.get('/uno', (req, res) => res.sendFile(path.join(__dirname, 'public', 'uno', 'index.html')));
 app.get('/chess', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chess', 'index.html')));
 app.get('/minesweeper', (req, res) => res.sendFile(path.join(__dirname, 'public', 'minesweeper', 'index.html')));
 app.get('/jenga', (req, res) => res.sendFile(path.join(__dirname, 'public', 'jenga', 'index.html')));
+app.get('/kitty', (req, res) => res.sendFile(path.join(__dirname, 'public', 'kittyexploding', 'index.html')));
 
 // CHỈ CÒN LƯU DATA CỜ VUA
 const chessRooms = {}; 
@@ -86,6 +90,7 @@ function floodReveal(startR, startC, rows, cols, mineSet) {
 // ==========================================
 const roomChats = {}; // { roomId: [{ playerID, name, text, timestamp }, ...] }
 const roomPlayers = {}; // { roomId: { playerID: playerName } } — danh sách tên người chơi đang biết trong phòng
+registerKitty(io);
 
 io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`);

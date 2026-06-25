@@ -265,6 +265,8 @@
         .game-icon-area.uno { background: radial-gradient(circle at 30% 20%, rgba(251,146,60,0.25), transparent 60%), var(--bg-elevated); }
         .game-icon-area.mines { background: radial-gradient(circle at 30% 20%, rgba(248,113,113,0.25), transparent 60%), var(--bg-elevated); }
         .game-icon-area.jenga { background: radial-gradient(circle at 30% 20%, rgba(212, 212, 216, 0.2), transparent 60%), var(--bg-elevated); }
+        .game-icon-area.kitty { background: radial-gradient(circle at 30% 20%, rgba(243,139,168,0.28), transparent 60%), var(--bg-elevated); }
+        .game-card:hover .game-icon-area.kitty { filter: brightness(1.1); }
 
         .game-info { padding: 20px 20px 4px; flex: 1; }
         .game-info h3 { font-size: 18.5px; font-weight: 800; margin-bottom: 9px; letter-spacing: -0.2px; }
@@ -478,6 +480,22 @@
             </div>
         </div>
 
+                <div class="game-card">
+                    <div class="game-icon-area kitty">🐱💥</div>
+                    <div class="game-info">
+                        <h3>Mèo Nổ</h3>
+                        <div class="tags">
+                            <span class="tag">2–5 Người</span>
+                            <span class="tag">Tâm Lý</span>
+                            <span class="tag">PvP / PvE</span>
+                        </div>
+                        <p>Đừng rút phải Mèo Nổ! Dùng Skip, Attack, Nope... để sống sót — người cuối cùng còn sống là người thắng.</p>
+                    </div>
+                    <div class="game-action">
+                        <button class="btn-main" style="width: 100%; background: #f38ba8; color: #1e1e2e;" onclick="showKittyOptions()">Vào Phòng Mèo Nổ</button>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -541,6 +559,52 @@
 
             <div class="options-grid" style="margin-top: 18px;">
                 <button class="btn-main btn-ghost" onclick="backToGamesFromMines()">🔙 Quay lại Sảnh</button>
+            </div>
+        </div>
+
+        <!-- ===== Mèo Nổ options ===== -->
+        <div class="options-view" id="step-kitty-options">
+            <div class="opt-icon" style="background: rgba(243,139,168,0.15);">🐱</div>
+            <h2>Thiết lập Mèo Nổ</h2>
+            <p class="lede">Chơi một mình với Bot AI hoặc rủ bạn bè vào cùng phòng</p>
+
+            <span class="field-label" style="margin-bottom: 9px;">Số Bot AI (chơi một mình)</span>
+            <div class="diff-grid" id="kitty-bot-grid" style="grid-template-columns: repeat(4,1fr); margin-bottom: 22px;">
+                <div class="diff-card selected" data-bots="1" onclick="selectKittyBots(1)">
+                    <div class="diff-name">1 Bot</div>
+                    <div class="diff-meta">2 người</div>
+                </div>
+                <div class="diff-card" data-bots="2" onclick="selectKittyBots(2)">
+                    <div class="diff-name">2 Bot</div>
+                    <div class="diff-meta">3 người</div>
+                </div>
+                <div class="diff-card" data-bots="3" onclick="selectKittyBots(3)">
+                    <div class="diff-name">3 Bot</div>
+                    <div class="diff-meta">4 người</div>
+                </div>
+                <div class="diff-card" data-bots="4" onclick="selectKittyBots(4)">
+                    <div class="diff-name">4 Bot</div>
+                    <div class="diff-meta">5 người</div>
+                </div>
+            </div>
+
+            <div class="options-grid">
+                <button class="btn-main" style="background:#f38ba8; color:#1e1e2e;" onclick="playKittyWithBots()">🤖 Chơi với Bot</button>
+                <button class="btn-main btn-outline" onclick="createKittyRoom()">👥 Tạo phòng Online</button>
+            </div>
+
+            <div class="divider-row" style="margin: 20px 0 14px;">
+                <div class="line"></div><span>Hoặc vào phòng có sẵn</span><div class="line"></div>
+            </div>
+
+            <div class="room-code-input">
+                <input type="text" id="kitty-join-code" placeholder="Nhập mã phòng..." maxlength="12"
+                    onkeypress="if(event.key==='Enter') joinKittyRoom()">
+                <button class="btn-main btn-outline" style="white-space:nowrap;" onclick="joinKittyRoom()">Vào phòng</button>
+            </div>
+
+            <div class="options-grid" style="margin-top: 18px;">
+                <button class="btn-main btn-ghost" onclick="backToGamesFromKitty()">🔙 Quay lại Sảnh</button>
             </div>
         </div>
 
@@ -661,6 +725,35 @@
             const code = document.getElementById('mines-join-code').value.trim().toUpperCase();
             if (!code) return alert("Nhập mã phòng đối thủ gửi cho bạn đã nha!");
             window.location.href = `/minesweeper?room=${code}`;
+        }
+        // ĐIỀU HƯỚNG MÈO NỔ
+        let kittyBots = 1;
+        function selectKittyBots(n) {
+            kittyBots = n;
+            document.querySelectorAll('#kitty-bot-grid .diff-card').forEach(el => {
+                el.classList.toggle('selected', parseInt(el.dataset.bots) === n);
+            });
+        }
+        function showKittyOptions() {
+            document.getElementById('step-games').style.display = 'none';
+            document.getElementById('step-kitty-options').style.display = 'block';
+        }
+        function backToGamesFromKitty() {
+            document.getElementById('step-kitty-options').style.display = 'none';
+            document.getElementById('step-games').style.display = 'block';
+        }
+        function playKittyWithBots() {
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            window.location.href = `/kitty?room=${roomId}&name=${encodeURIComponent(myName)}&avatar=${encodeURIComponent(myAvatar)}&bots=${kittyBots}`;
+        }
+        function createKittyRoom() {
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            window.location.href = `/kitty?room=${roomId}&name=${encodeURIComponent(myName)}&avatar=${encodeURIComponent(myAvatar)}&bots=0`;
+        }
+        function joinKittyRoom() {
+            const code = document.getElementById('kitty-join-code').value.trim().toUpperCase();
+            if (!code) return alert("Nhập mã phòng bạn bè gửi cho bạn nhé!");
+            window.location.href = `/kitty?room=${code}&name=${encodeURIComponent(myName)}&avatar=${encodeURIComponent(myAvatar)}&bots=0`;
         }
     </script>
 </body>
